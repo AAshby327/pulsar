@@ -1,0 +1,26 @@
+# Local development environment
+bin/
+.cache/
+.local/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Downloaded packages and temp files
+*.tar.gz
+*.zip
+*.AppImage
+*.deb
+*.rpm
+
+./claude

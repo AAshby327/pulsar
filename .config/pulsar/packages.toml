@@ -1,0 +1,146 @@
+# Pulsar Package Catalog
+# Defines available packages for installation via the pulsar CLI
+
+# Core Required Packages
+
+[packages.wezterm]
+description = "Terminal emulator (required)"
+type = "binary"
+category = "core"
+required = true
+
+[packages.wezterm.linux.x86_64]
+url = "https://github.com/wez/wezterm/releases/download/nightly/WezTerm-nightly-Ubuntu20.04.AppImage"
+archive_format = "appimage"
+binary_path = "wezterm"
+extract_appimage = true
+
+[packages.wezterm.windows.x86_64]
+url = "https://github.com/wez/wezterm/releases/download/nightly/WezTerm-windows-nightly.zip"
+archive_format = "zip"
+binary_path = "wezterm.exe"
+search_binary = true
+extract_all = true
+
+[packages.neovim]
+description = "Neovim text editor (required)"
+type = "binary"
+category = "core"
+required = true
+
+[packages.neovim.linux.x86_64]
+url = "https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.appimage"
+archive_format = "appimage"
+binary_path = "nvim"
+extract_appimage = true
+
+[packages.neovim.linux.aarch64]
+url = "https://github.com/neovim/neovim/releases/download/stable/nvim-linux-arm64.appimage"
+archive_format = "appimage"
+binary_path = "nvim"
+extract_appimage = true
+
+[packages.neovim.windows.x86_64]
+url = "https://github.com/neovim/neovim/releases/download/stable/nvim-win64.zip"
+archive_format = "zip"
+binary_path = "nvim-win64/bin/nvim.exe"
+extract_all = true
+
+[packages.neovim.windows.aarch64]
+url = "https://github.com/neovim/neovim/releases/download/stable/nvim-win-arm64.zip"
+archive_format = "zip"
+binary_path = "nvim-win-arm64/bin/nvim.exe"
+extract_all = true
+
+# Optional Tools
+
+[packages.ripgrep]
+description = "Fast grep replacement (rg)"
+type = "binary"
+category = "tool"
+
+[packages.ripgrep.linux.x86_64]
+url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-unknown-linux-musl.tar.gz"
+archive_format = "tar.gz"
+binary_path = "ripgrep-15.1.0-x86_64-unknown-linux-musl/rg"
+
+[packages.ripgrep.windows.x86_64]
+url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-pc-windows-msvc.zip"
+archive_format = "zip"
+binary_path = "ripgrep-15.1.0-x86_64-pc-windows-msvc/rg.exe"
+
+[packages.fd]
+description = "Fast find replacement"
+type = "binary"
+category = "tool"
+
+[packages.fd.linux.x86_64]
+url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-x86_64-unknown-linux-musl.tar.gz"
+archive_format = "tar.gz"
+binary_path = "fd-v10.4.2-x86_64-unknown-linux-musl/fd"
+
+[packages.fd.windows.x86_64]
+url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-x86_64-pc-windows-msvc.zip"
+archive_format = "zip"
+binary_path = "fd-v10.4.2-x86_64-pc-windows-msvc/fd.exe"
+
+[packages.fzf]
+description = "Fuzzy finder"
+type = "binary"
+category = "tool"
+required = true
+
+[packages.fzf.linux.x86_64]
+url = "https://github.com/junegunn/fzf/releases/download/v0.70.0/fzf-0.70.0-linux_amd64.tar.gz"
+archive_format = "tar.gz"
+binary_path = "fzf"
+
+[packages.fzf.windows.x86_64]
+url = "https://github.com/junegunn/fzf/releases/download/v0.70.0/fzf-0.70.0-windows_amd64.zip"
+archive_format = "zip"
+binary_path = "fzf.exe"
+
+[packages.bat]
+description = "Cat with syntax highlighting"
+type = "binary"
+category = "tool"
+
+[packages.bat.linux.x86_64]
+url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz"
+archive_format = "tar.gz"
+binary_path = "bat-v0.26.1-x86_64-unknown-linux-musl/bat"
+
+[packages.bat.windows.x86_64]
+url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-pc-windows-msvc.zip"
+archive_format = "zip"
+binary_path = "bat-v0.26.1-x86_64-pc-windows-msvc/bat.exe"
+
+[packages.eza]
+description = "Modern ls replacement"
+type = "binary"
+category = "tool"
+
+[packages.eza.linux.x86_64]
+url = "https://github.com/eza-community/eza/releases/download/v0.23.4/eza_x86_64-unknown-linux-musl.tar.gz"
+archive_format = "tar.gz"
+binary_path = "eza"
+
+[packages.eza.windows.x86_64]
+url = "https://github.com/eza-community/eza/releases/download/v0.23.4/eza_x86_64-pc-windows-gnu.zip"
+archive_format = "zip"
+binary_path = "eza.exe"
+
+[packages.delta]
+description = "Better git diff viewer"
+type = "binary"
+category = "tool"
+
+[packages.delta.linux.x86_64]
+url = "https://github.com/dandavison/delta/releases/download/0.19.1/delta-0.19.1-x86_64-unknown-linux-musl.tar.gz"
+archive_format = "tar.gz"
+binary_path = "delta-0.19.1-x86_64-unknown-linux-musl/delta"
+
+[packages.delta.windows.x86_64]
+url = "https://github.com/dandavison/delta/releases/download/0.19.1/delta-0.19.1-x86_64-pc-windows-msvc.zip"
+archive_format = "zip"
+binary_path = "delta-0.19.1-x86_64-pc-windows-msvc/delta.exe"
