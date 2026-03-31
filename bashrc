@@ -1,0 +1,61 @@
+PULSAR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PULSAR_ROOT
+export PULSAR_BIN_DIR="${PULSAR_ROOT}/bin"
+export PULSAR_SRC_DIR="${PULSAR_ROOT}/src"
+export PULSAR_CONFIG_DIR="${PULSAR_ROOT}/config"
+export PULSAR_CACHE_DIR="${PULSAR_ROOT}/.cache"
+export PULSAR_DATA_DIR="${PULSAR_ROOT}/.local/share"
+export PULSAR_STATE_DIR="${PULSAR_ROOT}/.local/state"
+
+# Create directory structure
+mkdir -p "${PULSAR_BIN_DIR}"
+mkdir -p "${PULSAR_CACHE_DIR}/uv"
+mkdir -p "${PULSAR_CONFIG_DIR}"
+mkdir -p "${PULSAR_DATA_DIR}/uv/python"
+mkdir -p "${PULSAR_DATA_DIR}/uv/tools"
+mkdir -p "${PULSAR_STATE_DIR}"
+
+# Set XDG directories for portable apps
+export XDG_CONFIG_HOME="${PULSAR_CONFIG_DIR}"
+export XDG_CACHE_HOME="${PULSAR_CACHE_DIR}"
+export XDG_DATA_HOME="${PULSAR_DATA_DIR}"
+export XDG_STATE_HOME="${PULSAR_STATE_DIR}"
+
+# UV environment variables
+export UV_TOOL_DIR="${PULSAR_DATA_DIR}/uv/tools"
+export UV_PYTHON_INSTALL_DIR="${PULSAR_DATA_DIR}/uv/python"
+export UV_CACHE_DIR="${PULSAR_CACHE_DIR}/uv"
+
+# Install uv if not already
+if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
+    echo "Installing uv to ${PULSAR_BIN_DIR}..."
+
+    # Download and install uv to the specified directory
+    # Set environment variables to ensure local installation
+    export UV_INSTALL_DIR="${PULSAR_BIN_DIR}"
+    export INSTALLER_NO_MODIFY_PATH=1
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    echo ""
+    echo "✓ uv installed successfully to ${PULSAR_BIN_DIR}/uv"
+fi
+
+# Install pulsar system packages
+${PULSAR_BIN_DIR}/uv sync --directory "${PULSAR_SRC_DIR}" --quiet
+
+# Add bin and UV tools to PATH
+export PATH="${PULSAR_BIN_DIR}:${PATH}"
+
+pulsar() {
+    if [[ "$1" == "init" ]]; then
+        # Capture output and execute it
+        # eval "$(/path/to/pulsar-bin init)"
+        echo "$@"
+    else
+        # Pass through other commands normally
+        # /path/to/pulsar-bin "$@"
+        ${PULSAR_SRC_DIR}/.venv/bin/python ${PULSAR_SRC_DIR}/pulsar.py "$@"
+    fi
+}
+
+alias psr=pulsar

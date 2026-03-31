@@ -88,37 +88,6 @@ def make_executable(path: Path):
         os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 
-def install_uv(root_dir: Path, os_type: str):
-    """Install UV package manager if not already present."""
-    print_step("Checking for UV package manager...")
-
-    uv_binary = root_dir / "bin" / ("uv.exe" if os_type == "windows" else "uv")
-
-    if uv_binary.exists():
-        print_success(f"UV already installed at {uv_binary}")
-        return
-
-    print_step("Installing UV package manager...")
-
-    if os_type == "windows":
-        install_script = root_dir / "install_uv.ps1"
-        if install_script.exists():
-            subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", str(install_script)], check=True)
-        else:
-            print_error("install_uv.ps1 not found!")
-            sys.exit(1)
-    else:
-        install_script = root_dir / "install_uv.sh"
-        if install_script.exists():
-            make_executable(install_script)
-            subprocess.run([str(install_script)], check=True)
-        else:
-            print_error("install_uv.sh not found!")
-            sys.exit(1)
-
-    print_success("UV installed successfully")
-
-
 def install_cli_tool(root_dir: Path, os_type: str):
     """Install the pulsar CLI tool via UV."""
     print_step("Installing pulsar CLI tool...")

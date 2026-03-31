@@ -23,4 +23,5 @@ venv/
 *.deb
 *.rpm
 
-./claude
+.claude/
+
