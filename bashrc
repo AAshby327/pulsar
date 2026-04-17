@@ -47,10 +47,9 @@ ${PULSAR_BIN_DIR}/uv sync --directory "${PULSAR_SRC_DIR}" --quiet
 export PATH="${PULSAR_BIN_DIR}:${PATH}"
 
 pulsar() {
-    if [[ "$1" == "init" ]]; then
+    if [[ "$1" == "activate" ]]; then
         # Capture output and execute it
-        # eval "$(/path/to/pulsar-bin init)"
-        echo "$@"
+        eval "$(${PULSAR_SRC_DIR}/.venv/bin/python ${PULSAR_SRC_DIR}/pulsar.py "$@")"
     else
         # Pass through other commands normally
         # /path/to/pulsar-bin "$@"
