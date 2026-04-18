@@ -1,49 +1,64 @@
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
+-- Detect platform
+local is_windows = wezterm.target_triple:find('windows') ~= nil
+
 -- Set up Pulsar environment variables
 -- Try to detect PULSAR_ROOT from environment first
 local pulsar_root = os.getenv('PULSAR_ROOT')
 
 -- If not set, try to infer from config directory
--- This config is in PULSAR_ROOT/.config/wezterm/wezterm.lua
--- So we go up two directories from XDG_CONFIG_HOME
 if not pulsar_root then
   local xdg_config = os.getenv('XDG_CONFIG_HOME')
   if xdg_config then
-    -- Remove trailing slash if present
-    xdg_config = xdg_config:gsub('/$', '')
+    -- Remove trailing slash/backslash if present
+    xdg_config = xdg_config:gsub('[/\\]$', '')
     -- Go up one level from .config to get PULSAR_ROOT
-    pulsar_root = xdg_config:match('(.*)/.config$') or xdg_config .. '/..'
+    pulsar_root = xdg_config:match('(.*)[\\/]%.?config$') or xdg_config .. '/..'
   else
-    -- Last resort: assume ~/.pulsar
-    pulsar_root = wezterm.home_dir .. '/.pulsar'
+    -- Last resort
+    if is_windows then
+      pulsar_root = wezterm.home_dir .. '\\pulsar'
+    else
+      pulsar_root = wezterm.home_dir .. '/.pulsar'
+    end
   end
 end
 
--- Add Pulsar bin directories to PATH
-local path_sep = ':'
-if wezterm.target_triple:find('windows') then
-  path_sep = ';'
-end
+-- Set path separator and directory separator based on platform
+local path_sep = is_windows and ';' or ':'
+local dir_sep = is_windows and '\\' or '/'
 
-local pulsar_bin = pulsar_root .. '/bin'
-local pulsar_local_bin = pulsar_root .. '/.local/bin'
+local pulsar_bin = pulsar_root .. dir_sep .. 'bin'
+local pulsar_local_bin = pulsar_root .. dir_sep .. '.local' .. dir_sep .. 'bin'
 
 -- Set environment variables for the shell
 config.set_environment_variables = {
   PULSAR_ROOT = pulsar_root,
   PULSAR_BIN_DIR = pulsar_bin,
-  PULSAR_CONFIG_DIR = pulsar_root .. '/.config',
-  PULSAR_CACHE_DIR = pulsar_root .. '/.cache',
-  PULSAR_DATA_DIR = pulsar_root .. '/.local/share',
-  PULSAR_STATE_DIR = pulsar_root .. '/.local/state',
-  XDG_CONFIG_HOME = pulsar_root .. '/.config',
-  XDG_CACHE_HOME = pulsar_root .. '/.cache',
-  XDG_DATA_HOME = pulsar_root .. '/.local/share',
-  XDG_STATE_HOME = pulsar_root .. '/.local/state',
+  PULSAR_CONFIG_DIR = pulsar_root .. dir_sep .. 'config',
+  PULSAR_CACHE_DIR = pulsar_root .. dir_sep .. '.cache',
+  PULSAR_DATA_DIR = pulsar_root .. dir_sep .. '.local' .. dir_sep .. 'share',
+  PULSAR_STATE_DIR = pulsar_root .. dir_sep .. '.local' .. dir_sep .. 'state',
+  XDG_CONFIG_HOME = pulsar_root .. dir_sep .. 'config',
+  XDG_CACHE_HOME = pulsar_root .. dir_sep .. '.cache',
+  XDG_DATA_HOME = pulsar_root .. dir_sep .. '.local' .. dir_sep .. 'share',
+  XDG_STATE_HOME = pulsar_root .. dir_sep .. '.local' .. dir_sep .. 'state',
   PATH = pulsar_bin .. path_sep .. pulsar_local_bin .. path_sep .. os.getenv('PATH'),
 }
+
+-- Configure shell to source the appropriate Pulsar activation script
+if is_windows then
+  -- Windows: use PowerShell with activation script
+  local activate_path = pulsar_root .. dir_sep .. 'activate.ps1'
+  config.default_prog = { 'powershell.exe', '-NoExit', '-File', activate_path }
+  -- Alternative for cmd.exe: { 'cmd.exe', '/k', pulsar_root .. dir_sep .. 'activate.bat' }
+else
+  -- Linux/Mac: use bash with rcfile
+  local activate_path = pulsar_root .. dir_sep .. 'activate'
+  config.default_prog = { '/bin/bash', '--rcfile', activate_path }
+end
 
 -- Color scheme
 config.color_scheme = 'Tokyo Night'

@@ -4,6 +4,7 @@ Pulsar - A Python Package Manager CLI
 import os
 import sys
 import random
+import typing
 
 import typer
 from rich.console import Console
@@ -134,7 +135,7 @@ def activate():
     """
 
     if pulsar_env.OS == 'linux':
-        script: list[str] = []
+        script: typing.List[str] = []
         for k, v in pulsar_env.ACTIVATION_VARS.items():
             script.append(f"export {k}={v}")
 
@@ -144,7 +145,7 @@ def activate():
 
 @app.command()
 def install(
-    packages: list[str] = typer.Argument(..., help="Package(s) to install"),
+    packages: typing.List[str] = typer.Argument(..., help="Package(s) to install"),
     reinstall: bool = typer.Option(False, '--reinstall', '-r', help="Reinstall package"),
     refresh_cache: bool = typer.Option(False, '--refresh-cache', help="Redownload package"),
     workers: int = typer.Option(4, '--workers', '-w', help="Number of parallel workers")
@@ -155,7 +156,7 @@ def install(
     Example:
         pulsar install wezterm
         pulsar install lazygit fzf --reinstall
-        pulsar install go==1.21.0
+        pulsar install nvim==0.12.1
     """
 
     package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
@@ -183,7 +184,7 @@ def install(
 
 @app.command()
 def uninstall(
-    packages: List[str] = typer.Argument(..., help="Package(s) to uninstall"),
+    packages: typing.List[str] = typer.Argument(..., help="Package(s) to uninstall"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ):
     """
