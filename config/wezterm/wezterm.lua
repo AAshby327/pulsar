@@ -50,9 +50,24 @@ config.set_environment_variables = {
 
 -- Configure shell to source the appropriate Pulsar activation script
 if is_windows then
-  -- Windows: use PowerShell with activation script
+  -- Windows: use Pulsar's PowerShell with activation script
+  local pwsh_path = pulsar_bin .. dir_sep .. 'pwsh' .. dir_sep .. 'pwsh.exe'
   local activate_path = pulsar_root .. dir_sep .. 'activate.ps1'
-  config.default_prog = { 'powershell.exe', '-NoExit', '-File', activate_path }
+
+  -- Check if Pulsar PowerShell exists, otherwise fall back to system PowerShell
+  local pwsh_exists = false
+  local f = io.open(pwsh_path, "r")
+  if f ~= nil then
+    io.close(f)
+    pwsh_exists = true
+  end
+
+  if pwsh_exists then
+    config.default_prog = { pwsh_path, '-NoLogo', '-NoExit', '-Command', '. "' .. activate_path .. '"' }
+  else
+    -- Fallback to system PowerShell
+    config.default_prog = { 'powershell.exe', '-NoExit', '-File', activate_path }
+  end
   -- Alternative for cmd.exe: { 'cmd.exe', '/k', pulsar_root .. dir_sep .. 'activate.bat' }
 else
   -- Linux/Mac: use bash with rcfile

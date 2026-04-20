@@ -5,6 +5,7 @@ import os
 import sys
 import random
 import typing
+import subprocess
 
 import typer
 from rich.console import Console
@@ -461,41 +462,87 @@ def clean(
         console.print(f"[yellow]⚠ Cleaned {success_count} director{'y' if success_count == 1 else 'ies'}, {error_count} failed[/yellow]\n")
         raise typer.Exit(code=1)
 
+@app.command()
+def launch():
+    """
+    🚀 Launch WezTerm in a detached window.
 
-# @app.command()
-# def run(
-#     script: str = typer.Argument(..., help="Script name to run"),
-#     args: Optional[List[str]] = typer.Argument(None, help="Arguments to pass to script"),
-# ):
-#     """
-#     🚀 Run a script defined in your project.
+    Example:
+        pulsar launch
+    """
+    from pathlib import Path
 
-#     Example:
-#         pulsar run dev
-#         pulsar run test --coverage
-#     """
-#     console.print(f"\n[bold cyan]Running script:[/bold cyan] {script}\n")
+    package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
 
-#     if args:
-#         console.print(f"[dim]Arguments: {' '.join(args)}[/dim]\n")
+    # Check if wezterm package exists
+    if 'wezterm' not in package_list:
+        console.print("\n[red]✗ Error: WezTerm package not found in package list[/red]\n")
+        raise typer.Exit(code=1)
 
-#     # TODO: Implement script execution logic
-#     console.print("[yellow]⚠ Run logic not yet implemented[/yellow]\n")
+    wezterm_pkg = package_list['wezterm']
+
+    # Check if wezterm is installed with pulsar
+    if not wezterm_pkg.is_installed_with_pulsar():
+        console.print("\n[yellow]⚠ WezTerm is not installed with Pulsar.[/yellow]")
+        install_prompt = typer.confirm("Would you like to install WezTerm now?")
+
+        if not install_prompt:
+            console.print("[dim]Exiting...[/dim]\n")
+            raise typer.Exit(code=0)
+
+        # Install wezterm
+        console.print("\n[bold cyan]Installing WezTerm...[/bold cyan]\n")
+        try:
+            installer = PackageInstaller(max_workers=1)
+            installer.install_packages(['wezterm'], reinstall=False, refresh_cache=False)
+        except Exception as e:
+            console.print(f"\n[red]✗ Installation failed: {e}[/red]\n")
+            raise typer.Exit(code=1)
+
+    # Launch wezterm from bin directory
+    wezterm_bin = Path(pulsar_env.PULSAR_BIN_DIR) / ('wezterm.exe' if pulsar_env.OS == 'windows' else 'wezterm')
+
+    if not wezterm_bin.exists():
+        console.print(f"\n[red]✗ WezTerm executable not found at: {wezterm_bin}[/red]\n")
+        raise typer.Exit(code=1)
+
+    try:
+        if pulsar_env.OS == 'windows':
+            # Windows: Use CREATE_NEW_PROCESS_GROUP and DETACHED_PROCESS flags
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+
+            subprocess.Popen(
+                [str(wezterm_bin)],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True
+            )
+        else:
+            # Linux/Unix: Use nohup-style detachment
+            subprocess.Popen(
+                [str(wezterm_bin)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True
+            )
+
+    except Exception as e:
+        console.print(f"\n[red]✗ Failed to launch WezTerm: {e}[/red]\n")
+        raise typer.Exit(code=1)
 
 
 @app.command()
-def version(
-    show_all: bool = typer.Option(False, "--all", "-a", help="Show all version info"),
-):
+def version():
     """
     📌 Show Pulsar version.
     """
     console.print("\n[bold cyan]Pulsar Package Manager[/bold cyan]")
     console.print("[green]Version:[/green] 0.1.0\n")
-
-    if show_all:
-        console.print("[dim]Python: 3.12+[/dim]")
-        console.print("[dim]Platform: Cross-platform[/dim]\n")
 
 
 @app.callback(invoke_without_command=True)

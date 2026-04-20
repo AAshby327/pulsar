@@ -154,5 +154,3 @@ class PackageInstaller:
             table.add_row(pkg_text, status_text, progress_display)
 
         return table
-
-
