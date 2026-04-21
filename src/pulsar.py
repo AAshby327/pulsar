@@ -10,9 +10,7 @@ import subprocess
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
 from rich import box
-
 
 sys.path.append(
     os.environ.get(
@@ -21,14 +19,13 @@ sys.path.append(
     )
 )
 
-from src import pulsar_env
-from src.package_classes import LinuxPackage, WindowsPackage
-from src.package_installer import PackageInstaller
-from src.packages import *
+import pulsar_env
+from package_classes import LinuxPackage, WindowsPackage
+from package_installer import PackageInstaller
 
 app = typer.Typer(
     name="pulsar",
-    help="⭐ Pulsar - Python Package Manager",
+    help="Pulsar - Python Package Manager",
     add_completion=True,
     rich_markup_mode="rich",
 )
@@ -126,27 +123,106 @@ def show_banner():
         style="dim blue"
     )
 
+def get_all_packages() -> dict[str, LinuxPackage] | dict[str, WindowsPackage]:
+    from pathlib import Path
+    import importlib
+
+    # Automatically import all modules in this directory
+    # for module_path in Path(__file__).parent.glob("*.py"):
+    for module_path in Path(os.path.join(os.path.dirname(__file__), 'packages')).glob('*.py'):
+        if module_path.name == "__init__.py":
+            continue
+
+        module_name = module_path.stem
+        importlib.import_module(f'packages.{module_name}')
+
+    return LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
+
+
 @app.command()
-def activate():
+def activate(
+    shell: typing.Optional[str] = typer.Option(None, '--shell', help="Shell type (bash or powershell)")
+):
     """
     🎉 Activate the Pulsar environment.
 
     Example:
         pulsar activate
+        pulsar activate --shell bash
+        pulsar activate --shell powershell
     """
+    # Detect shell type if not specified
+    if shell is None:
+        # Check for PowerShell environment variables
+        if os.environ.get('PSModulePath') or os.environ.get('POWERSHELL_DISTRIBUTION_CHANNEL'):
+            shell = 'powershell'
+        else:
+            # Default to bash
+            shell = 'bash'
 
-    if pulsar_env.OS == 'linux':
-        script: typing.List[str] = []
-        for k, v in pulsar_env.ACTIVATION_VARS.items():
-            script.append(f"export {k}={v}")
+    shell = shell.lower()
+    if shell not in ['bash', 'powershell']:
+        console.print(f"[red]✗ Error: Unsupported shell '{shell}'[/red]")
+        console.print("[dim]Supported shells: bash, powershell[/dim]")
+        raise typer.Exit(code=1)
 
-        console.print('\n'.join(script))
-        return
+    # Get the appropriate package list based on OS
+    package_list = get_all_packages()
+
+    # Call on_env_activate() for all installed packages
+    for package_name, package_cls in package_list.items():
+        try:
+            # Skip packages that don't have complete implementations
+            if not hasattr(package_cls, 'is_installed_with_pulsar'):
+                continue
+
+            if package_cls.is_installed_with_pulsar():
+                package_cls.on_env_activate()
+        except (NotImplementedError, AttributeError):
+            # Skip abstract or incomplete package implementations
+            pass
+        except Exception as e:
+            # Don't fail activation if a package hook fails
+            console.print(f"[yellow]Warning: Failed to activate {package_name}: {e}[/yellow]", file=sys.stderr)
+
+    lines = []
+
+    # Generate and output the activation script
+    if shell == 'bash':
+        
+        # Environment variables
+        for name, value in pulsar_env.env_vars.items():
+            # Escape quotes in value
+            escaped_value = value.replace('"', '\\"')
+            lines.append(f'export {name}="{escaped_value}"')
+
+        # PATH additions (prepend to PATH)
+        for path in pulsar_env.path_entries:
+            escaped_path = path.replace('"', '\\"')
+            lines.append(f'export PATH="{escaped_path}:$PATH"')
+
+    else:  # powershell
+        # Environment variables
+        for name, value in pulsar_env.env_vars.items():
+            # Escape quotes in value for PowerShell
+            escaped_value = value.replace('"', '`"')
+            lines.append(f'$env:{name} = "{escaped_value}"')
+
+        # PATH additions (prepend to PATH)
+        for path in pulsar_env.path_entries:
+            escaped_path = path.replace('"', '`"')
+            lines.append(f'$env:PATH = "{escaped_path};$env:PATH"')
+
+    script = '\n'.join(lines)
+
+    # Print the script to stdout (will be eval'd by the calling shell script)
+    print(script)
 
 
 @app.command()
 def install(
-    packages: typing.List[str] = typer.Argument(..., help="Package(s) to install"),
+    packages: typing.Optional[typing.List[str]] = typer.Argument(None, help="Package(s) to install"),
+    all: bool = typer.Option(False, '--all', '-a', help="Install all available packages"),
     reinstall: bool = typer.Option(False, '--reinstall', '-r', help="Reinstall package"),
     refresh_cache: bool = typer.Option(False, '--refresh-cache', help="Redownload package"),
     workers: int = typer.Option(4, '--workers', '-w', help="Number of parallel workers")
@@ -158,20 +234,32 @@ def install(
         pulsar install wezterm
         pulsar install lazygit fzf --reinstall
         pulsar install nvim==0.12.1
+        pulsar install --all
     """
 
-    package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
+    package_list = get_all_packages()
 
-    # Validate all packages exist before starting installation
-    for package_str in packages:
-        package_name = package_str.split('==')[0].lower() if '==' in package_str else package_str.lower()
-
-        if package_name not in package_list:
-            console.print(f"[red]✗ Error: Package '{package_name}' not found[/red]")
-            console.print(f"[dim]Available packages: {', '.join(package_list.keys())}[/dim]")
+    # Handle --all flag
+    if all:
+        if packages:
+            console.print("[red]✗ Error: Cannot specify both --all and package names[/red]\n")
             raise typer.Exit(code=1)
+        packages = package_list.keys()
+        console.print(f"\n[bold cyan]Installing all packages:[/bold cyan] {', '.join(packages)}\n")
+    elif not packages:
+        console.print("[red]✗ Error: Specify package names or use --all flag[/red]\n")
+        raise typer.Exit(code=1)
+    else:
+        # Validate all packages exist before starting installation
+        for package_str in packages:
+            package_name = package_str.split('==')[0].lower() if '==' in package_str else package_str.lower()
 
-    console.print(f"\n[bold cyan]Installing packages:[/bold cyan] {', '.join(packages)}\n")
+            if package_name not in package_list:
+                console.print(f"[red]✗ Error: Package '{package_name}' not found[/red]")
+                console.print(f"[dim]Available packages: {', '.join(package_list.keys())}[/dim]")
+                raise typer.Exit(code=1)
+
+        console.print(f"\n[bold cyan]Installing packages:[/bold cyan] {', '.join(packages)}\n")
 
     # Create installer and install packages
     try:
@@ -185,7 +273,8 @@ def install(
 
 @app.command()
 def uninstall(
-    packages: typing.List[str] = typer.Argument(..., help="Package(s) to uninstall"),
+    packages: typing.Optional[typing.List[str]] = typer.Argument(None, help="Package(s) to uninstall"),
+    all: bool = typer.Option(False, "--all", "-a", help="Uninstall all installed packages"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ):
     """
@@ -194,18 +283,35 @@ def uninstall(
     Example:
         pulsar uninstall wezterm
         pulsar uninstall nodejs python --yes
+        pulsar uninstall --all --yes
     """
-    package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
+    package_list = get_all_packages()
+    print(package_list)
 
-    # Validate all packages exist
-    for package_name in packages:
-        package_name = package_name.lower()
-        if package_name not in package_list:
-            console.print(f"[red]✗ Error: Package '{package_name}' not found[/red]")
-            console.print(f"[dim]Available packages: {', '.join(package_list.keys())}[/dim]")
+    # Handle --all flag
+    if all:
+        if packages:
+            console.print("[red]✗ Error: Cannot specify both --all and package names[/red]\n")
             raise typer.Exit(code=1)
+        # Get all installed packages
+        packages = [name for name, pkg in package_list.items() if pkg.is_installed_with_pulsar()]
+        if not packages:
+            console.print("\n[yellow]No packages are currently installed.[/yellow]\n")
+            return
+        console.print(f"\n[bold red]Uninstalling all installed packages:[/bold red] {', '.join(packages)}\n")
+    elif not packages:
+        console.print("[red]✗ Error: Specify package names or use --all flag[/red]\n")
+        raise typer.Exit(code=1)
+    else:
+        # Validate all packages exist
+        for package_name in packages:
+            package_name = package_name.lower()
+            if package_name not in package_list:
+                console.print(f"[red]✗ Error: Package '{package_name}' not found[/red]")
+                console.print(f"[dim]Available packages: {', '.join(package_list.keys())}[/dim]")
+                raise typer.Exit(code=1)
 
-    console.print(f"\n[bold red]Uninstalling packages:[/bold red] {', '.join(packages)}\n")
+        console.print(f"\n[bold red]Uninstalling packages:[/bold red] {', '.join(packages)}\n")
 
     # Check which packages are actually installed
     to_uninstall = []
@@ -279,7 +385,7 @@ def uninstall(
 
 @app.command()
 def list(
-    format: str = typer.Option("table", "--format", "-f", help="Output format: table, json, simple"),
+    format: str = typer.Option("simple", "--format", "-f", help="Output format: table, json, simple"),
     installed_only: bool = typer.Option(False, "--installed", "-i", help="Show only installed packages"),
 ):
     """
@@ -291,7 +397,7 @@ def list(
         pulsar list --format json
         pulsar list --format simple
     """
-    package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
+    package_list = get_all_packages()
 
     # Gather package information
     packages_info = []
@@ -370,31 +476,43 @@ def list(
 
 @app.command()
 def clean(
-    data: bool = typer.Option(False, "--data", help="Also clean data and state directories"),
+    cache: bool = typer.Option(False, "--cache", help="Clean cache directory"),
+    data: bool = typer.Option(False, "--data", help="Clean data and state directories"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ):
     """
-    🧹 Clean cache and optionally data/state directories.
+    🧹 Clean cache and/or data/state directories.
 
     Example:
-        pulsar clean                    # Clean cache only
-        pulsar clean --data             # Clean cache, data, and state
-        pulsar clean --yes              # Skip confirmation
+        pulsar clean --cache            # Clean cache only
+        pulsar clean --data             # Clean data and state
+        pulsar clean --cache --data     # Clean cache and data
+        pulsar clean --cache --yes      # Skip confirmation
     """
     import shutil
     from pathlib import Path
+
+    # Check if at least one option is specified
+    if not cache and not data:
+        console.print("[red]✗ Error: Specify at least one option: --cache or --data[/red]")
+        console.print("[dim]Examples:[/dim]")
+        console.print("  pulsar clean --cache")
+        console.print("  pulsar clean --data")
+        console.print("  pulsar clean --cache --data")
+        raise typer.Exit(code=1)
 
     console.print("\n[bold cyan]Cleaning Pulsar directories...[/bold cyan]\n")
 
     # Determine what to clean
     dirs_to_clean = []
 
-    # Always clean cache
-    cache_dir = Path(pulsar_env.PULSAR_CACHE_DIR)
-    if cache_dir.exists():
-        dirs_to_clean.append(("Cache", cache_dir))
+    # Clean cache if requested
+    if cache:
+        cache_dir = Path(pulsar_env.PULSAR_CACHE_DIR)
+        if cache_dir.exists():
+            dirs_to_clean.append(("Cache", cache_dir))
 
-    # Optionally clean data and state
+    # Clean data and state if requested
     if data:
         data_dir = Path(pulsar_env.PULSAR_DATA_DIR)
         state_dir = Path(pulsar_env.PULSAR_STATE_DIR)
@@ -472,7 +590,7 @@ def launch():
     """
     from pathlib import Path
 
-    package_list = LinuxPackage.PACKAGE_LIST if pulsar_env.OS == 'linux' else WindowsPackage.PACKAGE_LIST
+    package_list = get_all_packages()
 
     # Check if wezterm package exists
     if 'wezterm' not in package_list:
@@ -500,7 +618,7 @@ def launch():
             raise typer.Exit(code=1)
 
     # Launch wezterm from bin directory
-    wezterm_bin = Path(pulsar_env.PULSAR_BIN_DIR) / ('wezterm.exe' if pulsar_env.OS == 'windows' else 'wezterm')
+    wezterm_bin = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / ('wezterm.exe' if pulsar_env.OS == 'windows' else 'wezterm')
 
     if not wezterm_bin.exists():
         console.print(f"\n[red]✗ WezTerm executable not found at: {wezterm_bin}[/red]\n")
@@ -551,7 +669,7 @@ def main(
     display_banner: bool = typer.Option(True, "--banner/--no-banner", help="Show ASCII banner"),
 ):
     """
-    ⭐ Pulsar - Python Package Manager
+    Pulsar - Python Package Manager
 
     A modern, fast Python package manager with a beautiful CLI interface.
     """

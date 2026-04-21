@@ -50,11 +50,11 @@ config.set_environment_variables = {
 
 -- Configure shell to source the appropriate Pulsar activation script
 if is_windows then
-  -- Windows: use Pulsar's PowerShell with activation script
-  local pwsh_path = pulsar_bin .. dir_sep .. 'pwsh' .. dir_sep .. 'pwsh.exe'
+  -- Windows: use Pulsar's PowerShell if installed
+  local pwsh_path = pulsar_bin .. dir_sep .. 'powershell' .. dir_sep .. 'pwsh.exe'
   local activate_path = pulsar_root .. dir_sep .. 'activate.ps1'
 
-  -- Check if Pulsar PowerShell exists, otherwise fall back to system PowerShell
+  -- Check if Pulsar PowerShell exists
   local pwsh_exists = false
   local f = io.open(pwsh_path, "r")
   if f ~= nil then
@@ -64,11 +64,8 @@ if is_windows then
 
   if pwsh_exists then
     config.default_prog = { pwsh_path, '-NoLogo', '-NoExit', '-Command', '. "' .. activate_path .. '"' }
-  else
-    -- Fallback to system PowerShell
-    config.default_prog = { 'powershell.exe', '-NoExit', '-File', activate_path }
   end
-  -- Alternative for cmd.exe: { 'cmd.exe', '/k', pulsar_root .. dir_sep .. 'activate.bat' }
+  -- Otherwise use WezTerm's default shell
 else
   -- Linux/Mac: use bash with rcfile
   local activate_path = pulsar_root .. dir_sep .. 'activate'

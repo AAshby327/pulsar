@@ -28,38 +28,6 @@ $env:UV_TOOL_DIR = "$env:PULSAR_DATA_DIR\uv\tools"
 $env:UV_PYTHON_INSTALL_DIR = "$env:PULSAR_DATA_DIR\uv\python"
 $env:UV_CACHE_DIR = "$env:PULSAR_CACHE_DIR\uv"
 
-# TODO: Make this an optional package
-# Install PowerShell if not already installed
-$pwshDir = Join-Path $env:PULSAR_BIN_DIR "pwsh"
-$pwshPath = Join-Path $pwshDir "pwsh.exe"
-if (-not (Test-Path $pwshPath)) {
-    # Get latest PowerShell release info
-    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
-    $asset = $releases.assets | Where-Object { $_.name -like "*win-x64.zip" -and $_.name -notlike "*arm*" } | Select-Object -First 1
-
-    if ($asset) {
-        $downloadUrl = $asset.browser_download_url
-        $zipPath = Join-Path $env:PULSAR_CACHE_DIR "powershell.zip"
-
-        # Download PowerShell
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
-
-        # Extract directly to final location
-        New-Item -ItemType Directory -Force -Path $pwshDir | Out-Null
-        Expand-Archive -Path $zipPath -DestinationPath $pwshDir -Force
-
-        # Cleanup
-        Remove-Item -Force $zipPath
-    } else {
-        Write-Host "[WARNING] Could not find PowerShell download, skipping installation" -ForegroundColor Yellow
-    }
-}
-
-# Add PowerShell to PATH if installed
-if (Test-Path $pwshPath) {
-    $env:PATH = "$pwshDir;$env:PATH"
-}
-
 # Install uv if not already installed
 $uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
 if (-not (Test-Path $uvPath)) {
@@ -82,6 +50,9 @@ if (-not (Test-Path $uvPath)) {
 # Add bin directory to PATH
 $env:PATH = "$env:PULSAR_BIN_DIR;$env:PATH"
 
+$output = & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" "activate" "--shell" "powershell"
+Invoke-Expression $output
+
 # Define pulsar function
 function pulsar {
     param(
@@ -89,29 +60,24 @@ function pulsar {
         $Args
     )
 
-    if ($Args.Count -gt 0 -and $Args[0] -eq "activate") {
-        # For activate command, capture and execute the output
-        $output = & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" @Args
-        Invoke-Expression $output
+    if ($Args[0] -eq "reload") {
+        & "$env:PULSAR_ROOT\activate.ps1"
+    } elseif ($Args[0] -eq "reset") {
+        Write-Host "⚠️  This will delete .cache, .local, bin, and src\.venv in $env:PULSAR_ROOT"
+        $confirm = Read-Host "Are you sure? (yes/no)"
+        if ($confirm -eq "yes") {
+            Write-Host "🔄 Resetting Pulsar environment..."
+            Set-Location $env:PULSAR_ROOT
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue .cache, .local, bin, src\.venv
+            Write-Host "✓ Directories deleted, re-activating..."
+            & "$env:PULSAR_ROOT\activate.ps1"
+        } else {
+            Write-Host "Reset cancelled"
+        }
     } else {
-        # Pass through other commands normally
         & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" @Args
     }
 }
 
 # Define alias
 Set-Alias -Name psr -Value pulsar
-
-# Launch local PowerShell session if installed (only if not already in a Pulsar pwsh session)
-if (-not $env:PULSAR_PWSH_LAUNCHED) {
-    $pwshDir = Join-Path $env:PULSAR_BIN_DIR "pwsh"
-    $pwshPath = Join-Path $pwshDir "pwsh.exe"
-    if (Test-Path $pwshPath) {
-        # Set flag to prevent recursive launches
-        $env:PULSAR_PWSH_LAUNCHED = "1"
-        # Launch new session and re-source this script to get functions/aliases
-        & $pwshPath -NoLogo -NoExit -Command ". '$PSCommandPath'"
-    } else {
-        Write-Host "[WARNING] Local PowerShell not found, staying in current session" -ForegroundColor Yellow
-    }
-}

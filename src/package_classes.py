@@ -5,8 +5,10 @@ import typing
 import logging
 import urllib.request
 from pathlib import Path
+from collections.abc import Callable
 
 from rich.progress import Progress, DownloadColumn, BarColumn, TransferSpeedColumn, TimeRemainingColumn
+
 
 import pulsar_env
 
@@ -21,7 +23,6 @@ class LastLogHandler(logging.Handler):
 
 class _PulsarPackage(abc.ABC):
 
-    PACKAGE_LIST: dict[str, '_PulsarPackage'] = None
     CACHE_DIR: Path = None
 
     name: str = ''
@@ -32,6 +33,7 @@ class _PulsarPackage(abc.ABC):
     status_style: str = ''
 
     download_progress: Progress | None = None
+    download_callback: Callable | None = None  # Optional callback to trigger display updates
     logger: logging.Logger = None
 
     @classmethod
@@ -84,10 +86,6 @@ class _PulsarPackage(abc.ABC):
         handler = LastLogHandler()
         cls.logger.addHandler(handler)
         
-        if cls.PACKAGE_LIST is not None:
-            assert cls.name not in cls.PACKAGE_LIST
-            cls.PACKAGE_LIST[cls.name] = cls
-        
         return super().__init_subclass__()
     
     @classmethod
@@ -111,7 +109,7 @@ class _PulsarPackage(abc.ABC):
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create progress bar
+        # Create progress bar (but don't start it - it will be rendered in the Live display)
         cls.download_progress = Progress(
             "[progress.description]{task.description}",
             BarColumn(),
@@ -128,7 +126,7 @@ class _PulsarPackage(abc.ABC):
 
                 # Add download task
                 task_id = cls.download_progress.add_task(
-                    f"Downloading {destination.name}",
+                    f"Downloading",
                     total=total_size
                 )
 
@@ -144,6 +142,10 @@ class _PulsarPackage(abc.ABC):
                         downloaded += len(chunk)
                         cls.download_progress.update(task_id, advance=len(chunk))
 
+                        # Trigger callback if set
+                        if cls.download_callback:
+                            cls.download_callback()
+
                 cls.logger.info(f"Downloaded {destination.name} ({downloaded} bytes)")
 
         finally:
@@ -152,13 +154,26 @@ class _PulsarPackage(abc.ABC):
 
         return destination
 
-
 class LinuxPackage(_PulsarPackage):
-    
-    dependencies: list['LinuxPackage']
+
+    dependencies: list['LinuxPackage'] = []
     PACKAGE_LIST: dict[str, 'LinuxPackage'] = dict()
+
+    def __init_subclass__(cls):
+
+        assert cls.name not in cls.PACKAGE_LIST
+        cls.PACKAGE_LIST[cls.name] = cls
+
+        return super().__init_subclass__()
 
 class WindowsPackage(_PulsarPackage):
 
-    dependencies: list['WindowsPackage']
+    dependencies: list['WindowsPackage'] = []
     PACKAGE_LIST: dict[str, 'WindowsPackage'] = dict()
+
+    def __init_subclass__(cls):
+
+        assert cls.name not in cls.PACKAGE_LIST
+        cls.PACKAGE_LIST[cls.name] = cls
+
+        return super().__init_subclass__()

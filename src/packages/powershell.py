@@ -11,30 +11,29 @@ from package_classes import LinuxPackage, WindowsPackage
 import pulsar_env
 
 
-class WeztermLinux(LinuxPackage):
-    name = 'wezterm'
-    description = 'GPU-accelerated terminal emulator'
+class PowerShellLinux(LinuxPackage):
+    name = 'powershell'
+    description = 'Cross-platform task automation and configuration management framework'
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest wezterm version from GitHub API"""
+        """Fetch the latest PowerShell version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/wez/wezterm/releases/latest"
-            request = urllib.request.Request(url)
-            # GitHub API may redirect, so we need to handle that
-            with urllib.request.urlopen(request, timeout=10) as response:
+            url = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
+            with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Wezterm uses date-based tags without 'v' prefix (e.g., "20240203-110809-5046fc22")
-                return data['tag_name']
+                # Remove 'v' prefix from tag_name (e.g., "v7.6.0" -> "7.6.0")
+                return data['tag_name'].lstrip('v')
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 20230712-072601-f4abf8fd")
-            return "20230712-072601-f4abf8fd"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 7.4.6")
+            return "7.4.6"
 
     @classmethod
     def is_installed(cls) -> bool:
+        """Check if PowerShell is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['which', 'wezterm'],
+                ['which', 'pwsh'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -45,18 +44,20 @@ class WeztermLinux(LinuxPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
+        """Check if PowerShell is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / 'wezterm'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell' / 'pwsh'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
+        """Get the installed version of PowerShell"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / 'wezterm'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell' / 'pwsh'
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -64,8 +65,8 @@ class WeztermLinux(LinuxPackage):
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "wezterm 20230712-072601-f4abf8fd"
-                match = re.search(r'wezterm\s+(\S+)', result.stdout)
+                # Extract version from output like "PowerShell 7.4.0"
+                match = re.search(r'PowerShell\s+(\S+)', result.stdout)
                 if match:
                     return match.group(1)
         except Exception as e:
@@ -75,15 +76,14 @@ class WeztermLinux(LinuxPackage):
 
     @classmethod
     def on_env_activate(cls):
-        cls.logger.info("Wezterm environment activated")
+        """Called when the pulsar environment is activated"""
+        cls.logger.info("PowerShell environment activated")
 
-        # Add wezterm bin subdirectory to PATH
-        wezterm_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'wezterm')
-        pulsar_env.add_to_path(wezterm_bin)
-
-        # Set WEZTERM_CONFIG_FILE to point to Pulsar's config directory
-        config_file = os.path.join(pulsar_env.PULSAR_CONFIG_DIR, 'wezterm', 'wezterm.lua')
-        pulsar_env.set_env('WEZTERM_CONFIG_FILE', config_file)
+        # Add PowerShell bin subdirectory to PATH
+        powershell_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'powershell')
+        current_path = os.environ.get('PATH', '')
+        if powershell_bin not in current_path:
+            pulsar_env.set_env('PATH', f"{powershell_bin}:{current_path}")
 
     @classmethod
     def install(
@@ -92,20 +92,21 @@ class WeztermLinux(LinuxPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
+        """Install PowerShell to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm'
-        binary_path = bin_dir / 'wezterm'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell'
+        binary_path = bin_dir / 'pwsh'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Wezterm is already installed")
+            cls.logger.info("PowerShell is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Wezterm installation")
+        cls.logger.info("Starting PowerShell installation")
 
         # Determine version to install
         if version is None:
@@ -114,15 +115,24 @@ class WeztermLinux(LinuxPackage):
 
         cls.logger.info(f"Installing version: {version}")
 
+        # Determine architecture
+        arch = pulsar_env.ARCH
+        if arch == 'x86_64':
+            arch_suffix = 'linux-x64'
+        elif arch == 'aarch64':
+            arch_suffix = 'linux-arm64'
+        else:
+            raise RuntimeError(f"Unsupported architecture: {arch}")
+
         # Build download URL
-        # Format: https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd.Ubuntu22.04.tar.xz
-        filename = f"wezterm-{version}.Ubuntu22.04.tar.xz"
-        url = f"https://github.com/wez/wezterm/releases/download/{version}/{filename}"
+        # Format: https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-x64.tar.gz
+        filename = f"powershell-{version}-{arch_suffix}.tar.gz"
+        url = f"https://github.com/PowerShell/PowerShell/releases/download/v{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
 
         # Create a temporary extraction directory
-        temp_extract_dir = cls.CACHE_DIR / f"wezterm-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"powershell-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -157,49 +167,38 @@ class WeztermLinux(LinuxPackage):
 
             temp_extract_dir.mkdir(parents=True, exist_ok=True)
 
-            # Extract tar.xz file
-            with tarfile.open(download_path, 'r:xz') as tar:
+            # Extract tar.gz file
+            with tarfile.open(download_path, 'r:gz') as tar:
                 tar.extractall(temp_extract_dir)
 
-            # Find the wezterm binaries directory in the extracted files
+            # Install to bin/powershell directory
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Finding wezterm binaries")
+            cls.logger.info("Installing PowerShell binaries")
 
-            wezterm_bin_dir = None
-            for potential_dir in temp_extract_dir.rglob("bin"):
-                # Look for the usr/bin directory containing wezterm binaries
-                if potential_dir.is_dir() and (potential_dir / "wezterm").exists():
-                    wezterm_bin_dir = potential_dir
-                    break
+            # Create bin/powershell directory if it doesn't exist
+            if bin_dir.exists():
+                import shutil
+                shutil.rmtree(bin_dir)
 
-            if not wezterm_bin_dir:
-                raise RuntimeError("Could not find wezterm binaries in archive")
-
-            cls.logger.info(f"Found binaries at {wezterm_bin_dir}")
-
-            # Create bin directory if it doesn't exist
             bin_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy all wezterm-related binaries
+            # Copy all extracted files to bin/powershell
             cls.set_status("Installing binaries")
             import shutil
 
-            wezterm_binaries = [
-                "wezterm",
-                "wezterm-gui",
-                "wezterm-mux-server",
-                "open-wezterm-here",
-                "strip-ansi-escapes"
-            ]
+            for item in temp_extract_dir.iterdir():
+                dst_item = bin_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(str(item), str(dst_item))
+                else:
+                    shutil.copy2(str(item), str(dst_item))
+                    # Make executable files executable
+                    if item.suffix == '' and not item.name.endswith('.dll'):
+                        dst_item.chmod(0o755)
 
-            for binary_name in wezterm_binaries:
-                src_binary = wezterm_bin_dir / binary_name
-                if src_binary.exists():
-                    dst_binary = bin_dir / binary_name
-                    cls.logger.info(f"Installing {binary_name} to {dst_binary}")
-                    shutil.copy2(str(src_binary), str(dst_binary))
-                    # Make binary executable
-                    dst_binary.chmod(0o755)
+            # Ensure pwsh is executable
+            if binary_path.exists():
+                binary_path.chmod(0o755)
 
             # Cleanup temporary extraction directory
             cls.set_status("Cleaning up")
@@ -211,7 +210,7 @@ class WeztermLinux(LinuxPackage):
                 download_path.unlink()
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Wezterm installed successfully to {binary_path}")
+            cls.logger.info(f"PowerShell installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -224,50 +223,48 @@ class WeztermLinux(LinuxPackage):
 
     @classmethod
     def uninstall(cls):
+        """Uninstall PowerShell from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Wezterm is not installed with Pulsar")
+            cls.logger.info("PowerShell is not installed with Pulsar")
             return
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell'
 
         try:
-            # Remove the entire wezterm directory
-            if bin_dir.exists():
-                import shutil
-                shutil.rmtree(bin_dir)
-                cls.logger.info(f"Removed {bin_dir}")
+            import shutil
+            shutil.rmtree(bin_dir)
+            cls.logger.info(f"Removed {bin_dir}")
         except Exception as e:
             cls.logger.error(f"Failed to uninstall: {e}")
             raise
 
 
-class WeztermWindows(WindowsPackage):
-    name = 'wezterm'
-    description = 'GPU-accelerated terminal emulator'
+class PowerShellWindows(WindowsPackage):
+    name = 'powershell'
+    description = 'Cross-platform task automation and configuration management framework'
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest wezterm version from GitHub API"""
+        """Fetch the latest PowerShell version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/wez/wezterm/releases/latest"
-            request = urllib.request.Request(url)
-            # GitHub API may redirect, so we need to handle that
-            with urllib.request.urlopen(request, timeout=10) as response:
+            url = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
+            with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Wezterm uses date-based tags without 'v' prefix (e.g., "20240203-110809-5046fc22")
-                return data['tag_name']
+                # Remove 'v' prefix from tag_name (e.g., "v7.6.0" -> "7.6.0")
+                return data['tag_name'].lstrip('v')
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 20230712-072601-f4abf8fd")
-            return "20230712-072601-f4abf8fd"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 7.4.6")
+            return "7.4.6"
 
     @classmethod
     def is_installed(cls) -> bool:
+        """Check if PowerShell is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['where', 'wezterm'],
+                ['where', 'pwsh'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -278,29 +275,28 @@ class WeztermWindows(WindowsPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
+        """Check if PowerShell is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / 'wezterm.exe'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell' / 'pwsh.exe'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
+        """Get the installed version of PowerShell"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / 'wezterm.exe'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell' / 'pwsh.exe'
             result = subprocess.run(
-                [str(binary_path), '--version'],
+                [str(binary_path), '-Command', '$PSVersionTable.PSVersion.ToString()'],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "wezterm 20230712-072601-f4abf8fd"
-                match = re.search(r'wezterm\s+(\S+)', result.stdout)
-                if match:
-                    return match.group(1)
+                return result.stdout.strip()
         except Exception as e:
             cls.logger.error(f"Failed to get version: {e}")
 
@@ -308,15 +304,18 @@ class WeztermWindows(WindowsPackage):
 
     @classmethod
     def on_env_activate(cls):
-        cls.logger.info("Wezterm environment activated")
+        """Called when the pulsar environment is activated"""
+        cls.logger.info("PowerShell environment activated")
 
-        # Add wezterm bin subdirectory to PATH
-        wezterm_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'wezterm')
-        pulsar_env.add_to_path(wezterm_bin)
+        # Add PowerShell bin subdirectory to PATH
+        powershell_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'powershell')
+        current_path = os.environ.get('PATH', '')
+        if powershell_bin not in current_path:
+            pulsar_env.set_env('PATH', f"{powershell_bin};{current_path}")
 
-        # Set WEZTERM_CONFIG_FILE to point to Pulsar's config directory
-        config_file = os.path.join(pulsar_env.PULSAR_CONFIG_DIR, 'wezterm', 'wezterm.lua')
-        pulsar_env.set_env('WEZTERM_CONFIG_FILE', config_file)
+        # Set PowerShell config directory
+        config_dir = os.path.join(pulsar_env.PULSAR_CONFIG_DIR, 'powershell')
+        pulsar_env.set_env('PSModulePath', config_dir)
 
     @classmethod
     def install(
@@ -325,20 +324,21 @@ class WeztermWindows(WindowsPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
+        """Install PowerShell to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm'
-        binary_path = bin_dir / 'wezterm.exe'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell'
+        binary_path = bin_dir / 'pwsh.exe'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Wezterm is already installed")
+            cls.logger.info("PowerShell is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Wezterm installation")
+        cls.logger.info("Starting PowerShell installation")
 
         # Determine version to install
         if version is None:
@@ -347,15 +347,24 @@ class WeztermWindows(WindowsPackage):
 
         cls.logger.info(f"Installing version: {version}")
 
+        # Determine architecture
+        arch = pulsar_env.ARCH
+        if arch == 'x86_64':
+            arch_suffix = 'win-x64'
+        elif arch == 'aarch64':
+            arch_suffix = 'win-arm64'
+        else:
+            raise RuntimeError(f"Unsupported architecture: {arch}")
+
         # Build download URL
-        # Format: https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/WezTerm-windows-20230712-072601-f4abf8fd.zip
-        filename = f"WezTerm-windows-{version}.zip"
-        url = f"https://github.com/wez/wezterm/releases/download/{version}/{filename}"
+        # Format: https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip
+        filename = f"PowerShell-{version}-{arch_suffix}.zip"
+        url = f"https://github.com/PowerShell/PowerShell/releases/download/v{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
 
         # Create a temporary extraction directory
-        temp_extract_dir = cls.CACHE_DIR / f"wezterm-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"powershell-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -394,49 +403,27 @@ class WeztermWindows(WindowsPackage):
             with zipfile.ZipFile(download_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_extract_dir)
 
-            # Find the wezterm binaries directory in the extracted files
+            # Install to bin/powershell directory
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Finding wezterm binaries")
+            cls.logger.info("Installing PowerShell binaries")
 
-            # The zip typically extracts to a directory like WezTerm-windows-{version}/
-            wezterm_bin_dir = None
-            for potential_dir in temp_extract_dir.rglob("*"):
-                # Look for directory containing wezterm.exe
-                if potential_dir.is_dir() and (potential_dir / "wezterm.exe").exists():
-                    wezterm_bin_dir = potential_dir
-                    break
+            # Create bin/powershell directory if it doesn't exist
+            if bin_dir.exists():
+                import shutil
+                shutil.rmtree(bin_dir)
 
-            if not wezterm_bin_dir:
-                raise RuntimeError("Could not find wezterm binaries in archive")
-
-            cls.logger.info(f"Found binaries at {wezterm_bin_dir}")
-
-            # Create bin directory if it doesn't exist
             bin_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy all wezterm-related binaries
+            # Copy all extracted files to bin/powershell
             cls.set_status("Installing binaries")
             import shutil
 
-            wezterm_binaries = [
-                "wezterm.exe",
-                "wezterm-gui.exe",
-                "wezterm-mux-server.exe",
-                "strip-ansi-escapes.exe"
-            ]
-
-            for binary_name in wezterm_binaries:
-                src_binary = wezterm_bin_dir / binary_name
-                if src_binary.exists():
-                    dst_binary = bin_dir / binary_name
-                    cls.logger.info(f"Installing {binary_name} to {dst_binary}")
-                    shutil.copy2(str(src_binary), str(dst_binary))
-
-            # Copy DLL files if they exist
-            for dll_file in wezterm_bin_dir.glob("*.dll"):
-                dst_dll = bin_dir / dll_file.name
-                cls.logger.info(f"Installing {dll_file.name} to {dst_dll}")
-                shutil.copy2(str(dll_file), str(dst_dll))
+            for item in temp_extract_dir.iterdir():
+                dst_item = bin_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(str(item), str(dst_item))
+                else:
+                    shutil.copy2(str(item), str(dst_item))
 
             # Cleanup temporary extraction directory
             cls.set_status("Cleaning up")
@@ -448,7 +435,7 @@ class WeztermWindows(WindowsPackage):
                 download_path.unlink()
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Wezterm installed successfully to {binary_path}")
+            cls.logger.info(f"PowerShell installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -461,21 +448,20 @@ class WeztermWindows(WindowsPackage):
 
     @classmethod
     def uninstall(cls):
+        """Uninstall PowerShell from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Wezterm is not installed with Pulsar")
+            cls.logger.info("PowerShell is not installed with Pulsar")
             return
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'powershell'
 
         try:
-            # Remove the entire wezterm directory
-            if bin_dir.exists():
-                import shutil
-                shutil.rmtree(bin_dir)
-                cls.logger.info(f"Removed {bin_dir}")
+            import shutil
+            shutil.rmtree(bin_dir)
+            cls.logger.info(f"Removed {bin_dir}")
         except Exception as e:
             cls.logger.error(f"Failed to uninstall: {e}")
             raise

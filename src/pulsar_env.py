@@ -144,8 +144,137 @@ UV_CACHE_DIR = _get_env_or_default(
 
 
 # ============================================================================
-# Activation Variables
+# Activation State Management
 # ============================================================================
 
-# Variables to export when activating Pulsar environment
-ACTIVATION_VARS: dict[str, str] = {}
+env_vars: dict[str, str] = {}
+path_entries: list[str] = []
+
+def set_env(name: str, value: str):
+    """Set an environment variable.
+
+    Args:
+        name: Environment variable name
+        value: Environment variable value
+    """
+
+    assert name not in env_vars
+    env_vars[name] = value
+
+def add_to_path(directory: str):
+    """Add a directory to PATH.
+
+    Args:
+        directory: Directory path to add to PATH
+    """
+    if directory not in path_entries:
+        path_entries.append(directory)
+
+# class ActivationState:
+#     """Accumulates environment changes for shell activation scripts."""
+
+#     def __init__(self):
+#         self.env_vars: dict[str, str] = {}
+#         self.path_entries: list[str] = []
+#         self.aliases: dict[str, str] = {}
+
+#     def set_env(self, name: str, value: str):
+#         """Set an environment variable.
+
+#         Args:
+#             name: Environment variable name
+#             value: Environment variable value
+#         """
+#         self.env_vars[name] = value
+
+#     def add_to_path(self, directory: str):
+#         """Add a directory to PATH.
+
+#         Args:
+#             directory: Directory path to add to PATH
+#         """
+#         if directory not in self.path_entries:
+#             self.path_entries.append(directory)
+
+#     def add_alias(self, name: str, command: str):
+#         """Add a shell alias.
+
+#         Args:
+#             name: Alias name
+#             command: Command to alias
+#         """
+#         self.aliases[name] = command
+
+#     def generate_bash_script(self) -> str:
+#         """Generate bash activation script.
+
+#         Returns:
+#             Bash script as a string
+#         """
+#         lines = []
+
+#         # Environment variables
+#         for name, value in self.env_vars.items():
+#             # Escape quotes in value
+#             escaped_value = value.replace('"', '\\"')
+#             lines.append(f'export {name}="{escaped_value}"')
+
+#         # PATH additions (prepend to PATH)
+#         for path in self.path_entries:
+#             escaped_path = path.replace('"', '\\"')
+#             lines.append(f'export PATH="{escaped_path}:$PATH"')
+
+#         # Aliases
+#         for name, command in self.aliases.items():
+#             escaped_command = command.replace('"', '\\"')
+#             lines.append(f'alias {name}="{escaped_command}"')
+
+#         return '\n'.join(lines)
+
+#     def generate_powershell_script(self) -> str:
+#         """Generate PowerShell activation script.
+
+#         Returns:
+#             PowerShell script as a string
+#         """
+#         lines = []
+
+#         # Environment variables
+#         for name, value in self.env_vars.items():
+#             # Escape quotes in value for PowerShell
+#             escaped_value = value.replace('"', '`"')
+#             lines.append(f'$env:{name} = "{escaped_value}"')
+
+#         # PATH additions (prepend to PATH)
+#         for path in self.path_entries:
+#             escaped_path = path.replace('"', '`"')
+#             lines.append(f'$env:PATH = "{escaped_path};$env:PATH"')
+
+#         # Aliases (PowerShell aliases are more limited)
+#         for name, command in self.aliases.items():
+#             # For simple commands, use Set-Alias
+#             # For complex commands, we'd need to create functions instead
+#             escaped_command = command.replace('"', '`"')
+#             lines.append(f'Set-Alias -Name {name} -Value "{escaped_command}"')
+
+#         return '\n'.join(lines)
+
+
+# # Global activation state instance
+# _activation_state = ActivationState()
+
+
+# def get_activation_state() -> ActivationState:
+#     """Get the current activation state.
+
+#     Returns:
+#         The global ActivationState instance
+#     """
+#     return _activation_state
+
+
+# def reset_activation_state():
+#     """Reset the activation state to a clean slate."""
+#     global _activation_state
+#     _activation_state = ActivationState()
+

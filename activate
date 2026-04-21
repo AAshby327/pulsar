@@ -34,9 +34,8 @@ if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
     # Set environment variables to ensure local installation
     export UV_INSTALL_DIR="${PULSAR_BIN_DIR}"
     export INSTALLER_NO_MODIFY_PATH=1
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1
 
-    echo ""
     echo "✓ uv installed successfully to ${PULSAR_BIN_DIR}/uv"
 fi
 
@@ -46,13 +45,25 @@ ${PULSAR_BIN_DIR}/uv sync --directory "${PULSAR_SRC_DIR}" --quiet
 # Add bin and UV tools to PATH
 export PATH="${PULSAR_BIN_DIR}:${PATH}"
 
+eval "$(${PULSAR_SRC_DIR}/.venv/bin/python ${PULSAR_SRC_DIR}/pulsar.py activate --shell bash)"
+
 pulsar() {
-    if [[ "$1" == "activate" ]]; then
-        # Capture output and execute it
-        eval "$(${PULSAR_SRC_DIR}/.venv/bin/python ${PULSAR_SRC_DIR}/pulsar.py "$@")"
+    if [[ "$1" == "reload" ]]; then
+        source "${PULSAR_ROOT}/activate"
+    elif [[ "$1" == "reset" ]]; then
+        echo "⚠️  This will delete .cache, .local, bin, and src/.venv in ${PULSAR_ROOT}"
+        read -p "Are you sure? (yes/no): " confirm
+        if [[ "$confirm" == "yes" ]]; then
+            echo "🔄 Resetting Pulsar environment..."
+            cd "${PULSAR_ROOT}"
+            rm -rf .cache .local bin src/.venv
+            echo "✓ Directories deleted, re-activating..."
+            source "${PULSAR_ROOT}/activate"
+        else
+            echo "Reset cancelled"
+        fi
     else
         # Pass through other commands normally
-        # /path/to/pulsar-bin "$@"
         ${PULSAR_SRC_DIR}/.venv/bin/python ${PULSAR_SRC_DIR}/pulsar.py "$@"
     fi
 }
