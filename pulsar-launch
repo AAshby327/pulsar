@@ -4,17 +4,17 @@ set -euo pipefail
 
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PULSAR_ROOT="${SCRIPT_DIR}"
-export PULSAR_BIN_DIR="${PULSAR_ROOT}/bin"
+source "${SCRIPT_DIR}/activate"
 
 # Check if wezterm is installed
-if [[ -f "${PULSAR_BIN_DIR}/wezterm" ]]; then
+if [[ -f "${PULSAR_BIN_DIR}/wezterm/wezterm" ]]; then
     # Launch wezterm
-    exec "${PULSAR_BIN_DIR}/wezterm"
+    pulsar launch
+    
 else
     # wezterm not found, offer to install
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⭐ Pulsar Package Manager"
+    echo " Pulsar Package Manager"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "WezTerm is not installed."
@@ -24,7 +24,6 @@ else
 
     if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         # Source the activation script to get pulsar command
-        source "${SCRIPT_DIR}/activate"
 
         echo ""
         echo "Installing WezTerm..."
@@ -35,7 +34,7 @@ else
             echo "✓ Installation complete!"
             echo "Launching WezTerm..."
             sleep 1
-            exec "${PULSAR_BIN_DIR}/wezterm"
+            pulsar launch
         else
             echo ""
             echo "✗ Installation failed."

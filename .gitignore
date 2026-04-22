@@ -10,11 +10,11 @@ __pycache__/
 *.so
 .Python
 *.egg-info/
-dist/
-build/
 *.egg
-.venv/
-venv/
+src/.venv/
+
+# UV
+config/uv/uv-receipt.json
 
 # Downloaded packages and temp files
 *.tar.gz

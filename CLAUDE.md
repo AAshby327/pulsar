@@ -19,6 +19,7 @@ pulsar install wezterm
 pulsar list
 pulsar uninstall wezterm --yes
 pulsar clean
+pulsar dashboard  # Launch system monitoring dashboard
 ```
 
 ### Python Environment
@@ -48,6 +49,8 @@ src/.venv/bin/python src/pulsar.py --help
 **src/package_installer.py** - `PackageInstaller` class handles parallel installation with ThreadPoolExecutor. Manages package installation state, version checking, and provides a live Rich UI display during installation.
 
 **src/packages/** - Package plugin directory. Each file defines OS-specific package implementations (e.g., `WeztermLinux`, `WeztermWindows`). The `__init__.py` automatically imports all modules.
+
+**src/dashboard.py** - Real-time system monitoring dashboard built with Textual. Features btop-like graphs for CPU, GPU (NVIDIA), memory, and network monitoring. Includes custom widgets: SparklineWidget (time-series graphs), BarGraphWidget (progress bars), NetworkSpeedWidget, and SystemInfoWidget. Updates every second with 60-point history.
 
 ### Package Plugin System
 

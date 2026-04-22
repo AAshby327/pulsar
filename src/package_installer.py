@@ -231,10 +231,10 @@ class PackageInstaller:
                             break
 
     def create_display(self) -> Table:
-        table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
-        table.add_column("Package", width=20)
-        table.add_column("Status", width=25)
-        table.add_column("Progress")
+        table = Table(show_header=False, show_edge=False, pad_edge=False, box=None, expand=False, collapse_padding=False)
+        table.add_column("Package", min_width=15, no_wrap=True)
+        table.add_column("Status", min_width=15, no_wrap=True)
+        table.add_column("Progress", no_wrap=True, overflow="ellipsis", ratio=1)
 
         for name, pkg in self.packages.items():
             pkg_text = Text(f"📦 {name}", style='bold blue')

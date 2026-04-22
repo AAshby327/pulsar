@@ -165,8 +165,10 @@ class GitWindows(WindowsPackage):
     def is_installed_with_pulsar(cls) -> bool:
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.exe'
-        return binary_path.exists() and binary_path.is_file()
+        # Check for either git.bat or git.cmd
+        bat_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.bat'
+        cmd_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.cmd'
+        return (bat_path.exists() and bat_path.is_file()) or (cmd_path.exists() and cmd_path.is_file())
 
     @classmethod
     def get_version(cls) -> str:
@@ -174,7 +176,11 @@ class GitWindows(WindowsPackage):
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.exe'
+            # Try git.bat first, then git.cmd
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.bat'
+            if not binary_path.exists():
+                binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'git.cmd'
+
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -206,7 +212,6 @@ class GitWindows(WindowsPackage):
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'git.exe'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
@@ -258,55 +263,69 @@ class GitWindows(WindowsPackage):
                 cls.download(url, download_path)
 
             # Extract to git directory (PortableGit .7z.exe is self-extracting)
-            cls.set_status("Extracting", "cyan")
-            cls.logger.info(f"Extracting archive")
+            cls.set_status("Preparing extraction", "cyan")
+            cls.logger.info("Preparing to extract archive")
 
             # Clean directories if they exist
             import shutil
             if temp_extract_dir.exists():
+                cls.logger.info("Removing old temporary directory")
                 shutil.rmtree(temp_extract_dir)
             if git_install_dir.exists():
+                cls.logger.info("Removing old git installation")
                 shutil.rmtree(git_install_dir)
 
             temp_extract_dir.mkdir(parents=True, exist_ok=True)
             git_install_dir.mkdir(parents=True, exist_ok=True)
 
             # PortableGit is a self-extracting 7z archive
-            # We can extract it with 7z or run it with -o flag
-            # For simplicity, try to run it as self-extracting
+            # Run it silently without showing any windows
+            cls.set_status("Extracting archive", "cyan")
+            cls.logger.info("Running self-extracting archive (this may take a minute)")
+
+            # Create startupinfo to hide the window
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+                creation_flags = subprocess.CREATE_NO_WINDOW
+            else:
+                startupinfo = None
+                creation_flags = 0
+
             result = subprocess.run(
                 [str(download_path), '-o' + str(temp_extract_dir), '-y'],
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=300,
+                startupinfo=startupinfo,
+                creationflags=creation_flags
             )
 
             if result.returncode != 0:
-                # Try using 7z if available
-                try:
-                    result = subprocess.run(
-                        ['7z', 'x', str(download_path), f'-o{temp_extract_dir}', '-y'],
-                        capture_output=True,
-                        text=True,
-                        timeout=300
-                    )
-                    if result.returncode != 0:
-                        raise RuntimeError("Failed to extract with 7z")
-                except Exception:
-                    raise RuntimeError("Failed to extract PortableGit. Install 7-Zip or use a different method.")
+                raise RuntimeError(f"Failed to extract PortableGit: {result.stderr}")
+
+            cls.logger.info("Archive extracted successfully")
 
             # Move extracted files to git_install_dir
-            cls.set_status("Installing", "cyan")
-            cls.logger.info("Installing Git files")
+            cls.set_status("Installing files", "cyan")
+            cls.logger.info("Moving extracted files to installation directory")
 
+            file_count = 0
             for item in temp_extract_dir.iterdir():
                 dest = git_install_dir / item.name
                 if item.is_dir():
                     shutil.copytree(item, dest)
                 else:
                     shutil.copy2(item, dest)
+                file_count += 1
+
+            cls.logger.info(f"Installed {file_count} items")
 
             # Create symlink or wrapper in bin directory for git.exe
+            cls.set_status("Creating wrappers", "cyan")
+            cls.logger.info("Locating git.exe in installation")
+
             git_exe = git_install_dir / 'bin' / 'git.exe'
             if not git_exe.exists():
                 git_exe = git_install_dir / 'cmd' / 'git.exe'
@@ -314,16 +333,24 @@ class GitWindows(WindowsPackage):
             if not git_exe.exists():
                 raise RuntimeError("Could not find git.exe in extracted files")
 
-            cls.logger.info(f"Creating git.exe wrapper in bin directory")
+            cls.logger.info(f"Found git.exe at {git_exe}")
 
-            # Create a simple batch wrapper
+            # Create a batch wrapper (use .bat extension)
+            wrapper_path = bin_dir / 'git.bat'
             wrapper_content = f'@echo off\n"{git_exe}" %*\n'
-            binary_path.write_text(wrapper_content)
+            wrapper_path.write_text(wrapper_content)
+            cls.logger.info(f"Created git.bat wrapper")
+
+            # Also create git.cmd for compatibility
+            cmd_path = bin_dir / 'git.cmd'
+            cmd_path.write_text(wrapper_content)
+            cls.logger.info(f"Created git.cmd wrapper")
 
             # Cleanup temporary extraction directory
-            cls.set_status("Cleaning up")
+            cls.set_status("Cleaning up", "cyan")
             cls.logger.info("Removing temporary files")
             shutil.rmtree(temp_extract_dir)
+            cls.logger.info("Cleanup complete")
 
             cls.set_status("Complete", "green")
             cls.logger.info(f"Git installed successfully to {git_install_dir}")
@@ -349,16 +376,19 @@ class GitWindows(WindowsPackage):
             return
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'git.exe'
+        bat_path = bin_dir / 'git.bat'
+        cmd_path = bin_dir / 'git.cmd'
+        exe_path = bin_dir / 'git.exe'  # Remove old .exe if it exists
         git_install_dir = bin_dir / 'git'
 
         try:
             import shutil
 
-            # Remove wrapper
-            if binary_path.exists():
-                binary_path.unlink()
-                cls.logger.info(f"Removed {binary_path}")
+            # Remove wrappers
+            for path in [bat_path, cmd_path, exe_path]:
+                if path.exists():
+                    path.unlink()
+                    cls.logger.info(f"Removed {path}")
 
             # Remove git installation directory
             if git_install_dir.exists():

@@ -655,6 +655,30 @@ def launch():
 
 
 @app.command()
+def dashboard():
+    """
+    📊 Launch the Pulsar system monitoring dashboard.
+
+    Example:
+        pulsar dashboard
+    """
+    try:
+        from dashboard import run_dashboard
+        console.print("\n[bold cyan]Starting Pulsar Dashboard...[/bold cyan]")
+        console.print("[dim]Press 'q' to quit, 'r' to reset graphs[/dim]\n")
+        run_dashboard()
+    except ImportError as e:
+        console.print("\n[red]✗ Error: Dashboard dependencies not installed[/red]")
+        console.print(f"[dim]{e}[/dim]")
+        console.print("\n[yellow]Run the following to install dependencies:[/yellow]")
+        console.print("  [cyan]uv sync --directory src/[/cyan]\n")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"\n[red]✗ Error launching dashboard: {e}[/red]\n")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """
     📌 Show Pulsar version.
