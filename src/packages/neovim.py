@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tarfile
 import zipfile
@@ -8,32 +9,34 @@ from pathlib import Path
 
 from package_classes import LinuxPackage, WindowsPackage
 import pulsar_env
+from .ripgrep import RipgrepLinux, RipgrepWindows
+from .fzf import FzfLinux, FzfWindows
 
 
-class LazygitLinux(LinuxPackage):
-    name = 'lazygit'
-    description = 'Simple terminal UI for git commands'
-    dependencies = []
+class NeovimLinux(LinuxPackage):
+    name = 'neovim'
+    description = 'Hyperextensible Vim-based text editor'
+    dependencies = [RipgrepLinux, FzfLinux]
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest lazygit version from GitHub API"""
+        """Fetch the latest neovim version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/jesseduffield/lazygit/releases/latest"
+            url = "https://api.github.com/repos/neovim/neovim/releases/latest"
             with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Remove 'v' prefix from tag_name (e.g., "v0.61.1" -> "0.61.1")
+                # Remove 'v' prefix from tag_name (e.g., "v0.10.0" -> "0.10.0")
                 return data['tag_name'].lstrip('v')
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.44.1")
-            return "0.44.1"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.12.2")
+            return "0.12.2"
 
     @classmethod
     def is_installed(cls) -> bool:
-        """Check if lazygit is installed anywhere on the system"""
+        """Check if neovim is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['which', 'lazygit'],
+                ['which', 'nvim'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -44,20 +47,20 @@ class LazygitLinux(LinuxPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
-        """Check if lazygit is installed in Pulsar bin directory"""
+        """Check if neovim is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'bin' / 'nvim'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
-        """Get the installed version of lazygit"""
+        """Get the installed version of neovim"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'bin' / 'nvim'
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -65,8 +68,8 @@ class LazygitLinux(LinuxPackage):
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "version=0.40.2"
-                match = re.search(r'version[=\s]+v?(\S+)', result.stdout)
+                # Extract version from output like "NVIM v0.10.0"
+                match = re.search(r'NVIM\s+v?(\S+)', result.stdout)
                 if match:
                     return match.group(1)
         except Exception as e:
@@ -77,7 +80,21 @@ class LazygitLinux(LinuxPackage):
     @classmethod
     def on_env_activate(cls):
         """Called when the pulsar environment is activated"""
-        cls.logger.info("Lazygit environment activated")
+        cls.logger.info("Neovim environment activated")
+
+        # Add nvim bin subdirectory to PATH
+        nvim_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'nvim', 'bin')
+        if os.path.exists(nvim_bin):
+            pulsar_env.add_to_path(nvim_bin)
+            cls.logger.info(f"Added {nvim_bin} to PATH")
+
+        # Set VIMRUNTIME to point to Pulsar's nvim runtime files
+        runtime_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'share' / 'nvim' / 'runtime'
+        if runtime_path.exists():
+            pulsar_env.set_env('VIMRUNTIME', str(runtime_path))
+            cls.logger.info(f"Set VIMRUNTIME to {runtime_path}")
+        else:
+            cls.logger.warning(f"Runtime path not found: {runtime_path}")
 
     @classmethod
     def install(
@@ -86,21 +103,21 @@ class LazygitLinux(LinuxPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
-        """Install lazygit binary to the Pulsar bin directory"""
+        """Install neovim to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim'
+        binary_path = bin_dir / 'bin' / 'nvim'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Lazygit is already installed")
+            cls.logger.info("Neovim is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Lazygit installation")
+        cls.logger.info("Starting Neovim installation")
 
         # Determine version to install
         if version is None:
@@ -110,8 +127,8 @@ class LazygitLinux(LinuxPackage):
         cls.logger.info(f"Installing version: {version}")
 
         # Build download URL based on architecture
-        # Format: https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Linux_x86_64.tar.gz
-        # or:     https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Linux_arm64.tar.gz
+        # Format: https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-linux-x86_64.tar.gz
+        # or:     https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-linux-arm64.tar.gz
         if pulsar_env.ARCH == 'x86_64':
             arch_name = 'x86_64'
         elif pulsar_env.ARCH == 'aarch64':
@@ -119,11 +136,11 @@ class LazygitLinux(LinuxPackage):
         else:
             raise RuntimeError(f"Unsupported architecture: {pulsar_env.ARCH}")
 
-        filename = f"lazygit_{version}_Linux_{arch_name}.tar.gz"
-        url = f"https://github.com/jesseduffield/lazygit/releases/download/v{version}/{filename}"
+        filename = f"nvim-linux-{arch_name}.tar.gz"
+        url = f"https://github.com/neovim/neovim/releases/download/v{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
-        temp_extract_dir = cls.CACHE_DIR / f"lazygit-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"neovim-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -162,21 +179,30 @@ class LazygitLinux(LinuxPackage):
             with tarfile.open(download_path, 'r:gz') as tar:
                 tar.extractall(temp_extract_dir)
 
-            # Find the lazygit binary
+            # Find the nvim directory
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Installing lazygit binary")
+            cls.logger.info("Installing neovim")
 
-            lazygit_binary = temp_extract_dir / "lazygit"
-            if not lazygit_binary.exists():
-                raise RuntimeError("Could not find lazygit binary in archive")
+            extract_dir_name = f"nvim-linux-{arch_name}"
+            nvim_extracted_dir = temp_extract_dir / extract_dir_name
+            if not nvim_extracted_dir.exists():
+                raise RuntimeError("Could not find nvim directory in archive")
 
-            # Create bin directory if it doesn't exist
-            bin_dir.mkdir(parents=True, exist_ok=True)
+            # Verify binary exists
+            nvim_binary = nvim_extracted_dir / "bin" / "nvim"
+            if not nvim_binary.exists():
+                raise RuntimeError("Could not find nvim binary in archive")
 
-            # Copy binary
+            # Remove old installation if it exists
             import shutil
-            cls.logger.info(f"Installing lazygit to {binary_path}")
-            shutil.copy2(str(lazygit_binary), str(binary_path))
+            if bin_dir.exists():
+                cls.logger.info(f"Removing old installation at {bin_dir}")
+                shutil.rmtree(bin_dir)
+
+            # Copy the entire nvim directory structure
+            cls.logger.info(f"Installing nvim to {bin_dir}")
+            shutil.copytree(str(nvim_extracted_dir), str(bin_dir))
+
             # Make binary executable
             binary_path.chmod(0o755)
 
@@ -186,7 +212,7 @@ class LazygitLinux(LinuxPackage):
             shutil.rmtree(temp_extract_dir)
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Lazygit installed successfully to {binary_path}")
+            cls.logger.info(f"Neovim installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -199,50 +225,50 @@ class LazygitLinux(LinuxPackage):
 
     @classmethod
     def uninstall(cls):
-        """Uninstall lazygit from the Pulsar bin directory"""
+        """Uninstall neovim from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Lazygit is not installed with Pulsar")
+            cls.logger.info("Neovim is not installed with Pulsar")
             return
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit'
+        nvim_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim'
 
         try:
-            if binary_path.exists():
-                binary_path.unlink()
-                cls.logger.info(f"Removed {binary_path}")
+            if nvim_dir.exists():
+                import shutil
+                shutil.rmtree(nvim_dir)
+                cls.logger.info(f"Removed {nvim_dir}")
         except Exception as e:
             cls.logger.error(f"Failed to uninstall: {e}")
             raise
 
 
-class LazygitWindows(WindowsPackage):
-    name = 'lazygit'
-    description = 'Simple terminal UI for git commands'
-    dependencies = []  # Set in setup_dependencies()
+class NeovimWindows(WindowsPackage):
+    name = 'neovim'
+    description = 'Hyperextensible Vim-based text editor'
+    dependencies = [RipgrepWindows, FzfWindows]
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest lazygit version from GitHub API"""
+        """Fetch the latest neovim version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/jesseduffield/lazygit/releases/latest"
+            url = "https://api.github.com/repos/neovim/neovim/releases/latest"
             with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Remove 'v' prefix from tag_name (e.g., "v0.61.1" -> "0.61.1")
+                # Remove 'v' prefix from tag_name (e.g., "v0.10.0" -> "0.10.0")
                 return data['tag_name'].lstrip('v')
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.44.1")
-            return "0.44.1"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.12.2")
+            return "0.12.2"
 
     @classmethod
     def is_installed(cls) -> bool:
-        """Check if lazygit is installed anywhere on the system"""
+        """Check if neovim is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['where', 'lazygit'],
+                ['where', 'nvim'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -253,20 +279,20 @@ class LazygitWindows(WindowsPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
-        """Check if lazygit is installed in Pulsar bin directory"""
+        """Check if neovim is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit.exe'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'bin' / 'nvim.exe'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
-        """Get the installed version of lazygit"""
+        """Get the installed version of neovim"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit.exe'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'bin' / 'nvim.exe'
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -274,8 +300,8 @@ class LazygitWindows(WindowsPackage):
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "version=0.40.2"
-                match = re.search(r'version[=\s]+v?(\S+)', result.stdout)
+                # Extract version from output like "NVIM v0.10.0"
+                match = re.search(r'NVIM\s+v?(\S+)', result.stdout)
                 if match:
                     return match.group(1)
         except Exception as e:
@@ -286,7 +312,21 @@ class LazygitWindows(WindowsPackage):
     @classmethod
     def on_env_activate(cls):
         """Called when the pulsar environment is activated"""
-        cls.logger.info("Lazygit environment activated")
+        cls.logger.info("Neovim environment activated")
+
+        # Add nvim bin subdirectory to PATH
+        nvim_bin = os.path.join(pulsar_env.PULSAR_BIN_DIR, 'nvim', 'bin')
+        if os.path.exists(nvim_bin):
+            pulsar_env.add_to_path(nvim_bin)
+            cls.logger.info(f"Added {nvim_bin} to PATH")
+
+        # Set VIMRUNTIME to point to Pulsar's nvim runtime files
+        runtime_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim' / 'share' / 'nvim' / 'runtime'
+        if runtime_path.exists():
+            pulsar_env.set_env('VIMRUNTIME', str(runtime_path))
+            cls.logger.info(f"Set VIMRUNTIME to {runtime_path}")
+        else:
+            cls.logger.warning(f"Runtime path not found: {runtime_path}")
 
     @classmethod
     def install(
@@ -295,21 +335,21 @@ class LazygitWindows(WindowsPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
-        """Install lazygit to the Pulsar bin directory"""
+        """Install neovim to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit.exe'
+        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim'
+        binary_path = bin_dir / 'bin' / 'nvim.exe'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Lazygit is already installed")
+            cls.logger.info("Neovim is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Lazygit installation")
+        cls.logger.info("Starting Neovim installation")
 
         # Determine version to install
         if version is None:
@@ -319,20 +359,20 @@ class LazygitWindows(WindowsPackage):
         cls.logger.info(f"Installing version: {version}")
 
         # Build download URL based on architecture
-        # Format: https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Windows_x86_64.zip
-        # or:     https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Windows_arm64.zip
+        # Format: https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-win64.zip
+        # or:     https://github.com/neovim/neovim/releases/download/v0.12.2/nvim-win-arm64.zip
         if pulsar_env.ARCH == 'x86_64':
-            arch_name = 'x86_64'
+            arch_name = 'win64'
         elif pulsar_env.ARCH == 'aarch64':
-            arch_name = 'arm64'
+            arch_name = 'win-arm64'
         else:
             raise RuntimeError(f"Unsupported architecture: {pulsar_env.ARCH}")
 
-        filename = f"lazygit_{version}_Windows_{arch_name}.zip"
-        url = f"https://github.com/jesseduffield/lazygit/releases/download/v{version}/{filename}"
+        filename = f"nvim-{arch_name}.zip"
+        url = f"https://github.com/neovim/neovim/releases/download/v{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
-        temp_extract_dir = cls.CACHE_DIR / f"lazygit-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"neovim-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -371,21 +411,29 @@ class LazygitWindows(WindowsPackage):
             with zipfile.ZipFile(download_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_extract_dir)
 
-            # Find the lazygit binary
+            # Find the nvim directory
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Installing lazygit binary")
+            cls.logger.info("Installing neovim")
 
-            lazygit_binary = temp_extract_dir / "lazygit.exe"
-            if not lazygit_binary.exists():
-                raise RuntimeError("Could not find lazygit.exe in archive")
+            extract_dir_name = f"nvim-{arch_name}"
+            nvim_extracted_dir = temp_extract_dir / extract_dir_name
+            if not nvim_extracted_dir.exists():
+                raise RuntimeError("Could not find nvim directory in archive")
 
-            # Create bin directory if it doesn't exist
-            bin_dir.mkdir(parents=True, exist_ok=True)
+            # Verify binary exists
+            nvim_binary = nvim_extracted_dir / "bin" / "nvim.exe"
+            if not nvim_binary.exists():
+                raise RuntimeError("Could not find nvim.exe in archive")
 
-            # Copy binary
+            # Remove old installation if it exists
             import shutil
-            cls.logger.info(f"Installing lazygit to {binary_path}")
-            shutil.copy2(str(lazygit_binary), str(binary_path))
+            if bin_dir.exists():
+                cls.logger.info(f"Removing old installation at {bin_dir}")
+                shutil.rmtree(bin_dir)
+
+            # Copy the entire nvim directory structure
+            cls.logger.info(f"Installing nvim to {bin_dir}")
+            shutil.copytree(str(nvim_extracted_dir), str(bin_dir))
 
             # Cleanup temporary extraction directory
             cls.set_status("Cleaning up")
@@ -393,7 +441,7 @@ class LazygitWindows(WindowsPackage):
             shutil.rmtree(temp_extract_dir)
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Lazygit installed successfully to {binary_path}")
+            cls.logger.info(f"Neovim installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -406,22 +454,21 @@ class LazygitWindows(WindowsPackage):
 
     @classmethod
     def uninstall(cls):
-        """Uninstall lazygit from the Pulsar bin directory"""
+        """Uninstall neovim from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Lazygit is not installed with Pulsar")
+            cls.logger.info("Neovim is not installed with Pulsar")
             return
 
-        bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit.exe'
+        nvim_dir = Path(pulsar_env.PULSAR_BIN_DIR) / 'nvim'
 
         try:
-            if binary_path.exists():
-                binary_path.unlink()
-                cls.logger.info(f"Removed {binary_path}")
+            if nvim_dir.exists():
+                import shutil
+                shutil.rmtree(nvim_dir)
+                cls.logger.info(f"Removed {nvim_dir}")
         except Exception as e:
             cls.logger.error(f"Failed to uninstall: {e}")
             raise
-

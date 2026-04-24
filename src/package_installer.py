@@ -30,9 +30,13 @@ class PackageInstaller:
 
             # Recursively collect dependencies
             if hasattr(pkg, 'dependencies') and pkg.dependencies:
-                for dep_class in pkg.dependencies:
-                    # Dependencies are class references
-                    dep_name = dep_class.name
+                for dep in pkg.dependencies:
+                    # Dependencies can be class references or strings
+                    if isinstance(dep, str):
+                        dep_name = dep
+                    else:
+                        dep_name = dep.name
+
                     if dep_name in package_list:
                         dep_pkg = package_list[dep_name]
                         self.collect_dependencies(dep_pkg, collected, package_list)
@@ -55,9 +59,13 @@ class PackageInstaller:
 
             # Visit dependencies first
             if hasattr(pkg, 'dependencies') and pkg.dependencies:
-                for dep_class in pkg.dependencies:
-                    # Dependencies are class references
-                    dep_name = dep_class.name
+                for dep in pkg.dependencies:
+                    # Dependencies can be class references or strings
+                    if isinstance(dep, str):
+                        dep_name = dep
+                    else:
+                        dep_name = dep.name
+
                     if dep_name in packages:
                         visit(packages[dep_name])
 
@@ -183,8 +191,14 @@ class PackageInstaller:
                     # Check if all dependencies are completed
                     deps_ready = True
                     if hasattr(pkg, 'dependencies') and pkg.dependencies:
-                        for dep_class in pkg.dependencies:
-                            if dep_class.name not in completed:
+                        for dep in pkg.dependencies:
+                            # Dependencies can be class references or strings
+                            if isinstance(dep, str):
+                                dep_name = dep
+                            else:
+                                dep_name = dep.name
+
+                            if dep_name not in completed:
                                 deps_ready = False
                                 break
 

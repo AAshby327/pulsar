@@ -10,30 +10,30 @@ from package_classes import LinuxPackage, WindowsPackage
 import pulsar_env
 
 
-class LazygitLinux(LinuxPackage):
-    name = 'lazygit'
-    description = 'Simple terminal UI for git commands'
+class BatLinux(LinuxPackage):
+    name = 'bat'
+    description = 'A cat clone with syntax highlighting and Git integration'
     dependencies = []
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest lazygit version from GitHub API"""
+        """Fetch the latest bat version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/jesseduffield/lazygit/releases/latest"
+            url = "https://api.github.com/repos/sharkdp/bat/releases/latest"
             with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Remove 'v' prefix from tag_name (e.g., "v0.61.1" -> "0.61.1")
-                return data['tag_name'].lstrip('v')
+                # Tag format is "v0.26.1"
+                return data['tag_name']
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.44.1")
-            return "0.44.1"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to v0.26.1")
+            return "v0.26.1"
 
     @classmethod
     def is_installed(cls) -> bool:
-        """Check if lazygit is installed anywhere on the system"""
+        """Check if bat is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['which', 'lazygit'],
+                ['which', 'bat'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -44,20 +44,20 @@ class LazygitLinux(LinuxPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
-        """Check if lazygit is installed in Pulsar bin directory"""
+        """Check if bat is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'bat'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
-        """Get the installed version of lazygit"""
+        """Get the installed version of bat"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'bat'
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -65,8 +65,8 @@ class LazygitLinux(LinuxPackage):
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "version=0.40.2"
-                match = re.search(r'version[=\s]+v?(\S+)', result.stdout)
+                # Extract version from output like "bat 0.26.1"
+                match = re.search(r'bat\s+(\S+)', result.stdout)
                 if match:
                     return match.group(1)
         except Exception as e:
@@ -77,7 +77,7 @@ class LazygitLinux(LinuxPackage):
     @classmethod
     def on_env_activate(cls):
         """Called when the pulsar environment is activated"""
-        cls.logger.info("Lazygit environment activated")
+        cls.logger.info("bat environment activated")
 
     @classmethod
     def install(
@@ -86,44 +86,48 @@ class LazygitLinux(LinuxPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
-        """Install lazygit binary to the Pulsar bin directory"""
+        """Install bat binary to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit'
+        binary_path = bin_dir / 'bat'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Lazygit is already installed")
+            cls.logger.info("bat is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Lazygit installation")
+        cls.logger.info("Starting bat installation")
 
         # Determine version to install
         if version is None:
             cls.logger.info("Fetching latest version from GitHub...")
             version = cls.get_latest_version()
 
+        # Ensure version has 'v' prefix
+        if not version.startswith('v'):
+            version = f'v{version}'
+
         cls.logger.info(f"Installing version: {version}")
 
         # Build download URL based on architecture
-        # Format: https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Linux_x86_64.tar.gz
-        # or:     https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Linux_arm64.tar.gz
+        # Format: https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz
+        # or:     https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-unknown-linux-gnu.tar.gz
         if pulsar_env.ARCH == 'x86_64':
-            arch_name = 'x86_64'
+            arch_target = 'x86_64-unknown-linux-musl'
         elif pulsar_env.ARCH == 'aarch64':
-            arch_name = 'arm64'
+            arch_target = 'aarch64-unknown-linux-gnu'
         else:
             raise RuntimeError(f"Unsupported architecture: {pulsar_env.ARCH}")
 
-        filename = f"lazygit_{version}_Linux_{arch_name}.tar.gz"
-        url = f"https://github.com/jesseduffield/lazygit/releases/download/v{version}/{filename}"
+        filename = f"bat-{version}-{arch_target}.tar.gz"
+        url = f"https://github.com/sharkdp/bat/releases/download/{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
-        temp_extract_dir = cls.CACHE_DIR / f"lazygit-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"bat-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -162,21 +166,22 @@ class LazygitLinux(LinuxPackage):
             with tarfile.open(download_path, 'r:gz') as tar:
                 tar.extractall(temp_extract_dir)
 
-            # Find the lazygit binary
+            # Find the bat binary
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Installing lazygit binary")
+            cls.logger.info("Installing bat binary")
 
-            lazygit_binary = temp_extract_dir / "lazygit"
-            if not lazygit_binary.exists():
-                raise RuntimeError("Could not find lazygit binary in archive")
+            # The archive extracts to bat-{version}-{arch_target}/bat
+            bat_binary = temp_extract_dir / f"bat-{version}-{arch_target}" / "bat"
+            if not bat_binary.exists():
+                raise RuntimeError("Could not find bat binary in archive")
 
             # Create bin directory if it doesn't exist
             bin_dir.mkdir(parents=True, exist_ok=True)
 
             # Copy binary
             import shutil
-            cls.logger.info(f"Installing lazygit to {binary_path}")
-            shutil.copy2(str(lazygit_binary), str(binary_path))
+            cls.logger.info(f"Installing bat to {binary_path}")
+            shutil.copy2(str(bat_binary), str(binary_path))
             # Make binary executable
             binary_path.chmod(0o755)
 
@@ -186,7 +191,7 @@ class LazygitLinux(LinuxPackage):
             shutil.rmtree(temp_extract_dir)
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Lazygit installed successfully to {binary_path}")
+            cls.logger.info(f"bat installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -199,16 +204,16 @@ class LazygitLinux(LinuxPackage):
 
     @classmethod
     def uninstall(cls):
-        """Uninstall lazygit from the Pulsar bin directory"""
+        """Uninstall bat from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Lazygit is not installed with Pulsar")
+            cls.logger.info("bat is not installed with Pulsar")
             return
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit'
+        binary_path = bin_dir / 'bat'
 
         try:
             if binary_path.exists():
@@ -219,30 +224,30 @@ class LazygitLinux(LinuxPackage):
             raise
 
 
-class LazygitWindows(WindowsPackage):
-    name = 'lazygit'
-    description = 'Simple terminal UI for git commands'
-    dependencies = []  # Set in setup_dependencies()
+class BatWindows(WindowsPackage):
+    name = 'bat'
+    description = 'A cat clone with syntax highlighting and Git integration'
+    dependencies = []
 
     @classmethod
     def get_latest_version(cls) -> str:
-        """Fetch the latest lazygit version from GitHub API"""
+        """Fetch the latest bat version from GitHub API"""
         try:
-            url = "https://api.github.com/repos/jesseduffield/lazygit/releases/latest"
+            url = "https://api.github.com/repos/sharkdp/bat/releases/latest"
             with urllib.request.urlopen(url, timeout=10) as response:
                 data = json.loads(response.read().decode())
-                # Remove 'v' prefix from tag_name (e.g., "v0.61.1" -> "0.61.1")
-                return data['tag_name'].lstrip('v')
+                # Tag format is "v0.26.1"
+                return data['tag_name']
         except Exception as e:
-            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to 0.44.1")
-            return "0.44.1"
+            cls.logger.warning(f"Failed to fetch latest version: {e}, falling back to v0.26.1")
+            return "v0.26.1"
 
     @classmethod
     def is_installed(cls) -> bool:
-        """Check if lazygit is installed anywhere on the system"""
+        """Check if bat is installed anywhere on the system"""
         try:
             result = subprocess.run(
-                ['where', 'lazygit'],
+                ['where', 'bat'],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -253,20 +258,20 @@ class LazygitWindows(WindowsPackage):
 
     @classmethod
     def is_installed_with_pulsar(cls) -> bool:
-        """Check if lazygit is installed in Pulsar bin directory"""
+        """Check if bat is installed in Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             return False
-        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit.exe'
+        binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'bat.exe'
         return binary_path.exists() and binary_path.is_file()
 
     @classmethod
     def get_version(cls) -> str:
-        """Get the installed version of lazygit"""
+        """Get the installed version of bat"""
         if not cls.is_installed_with_pulsar():
             return "Not installed"
 
         try:
-            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'lazygit.exe'
+            binary_path = Path(pulsar_env.PULSAR_BIN_DIR) / 'bat.exe'
             result = subprocess.run(
                 [str(binary_path), '--version'],
                 capture_output=True,
@@ -274,8 +279,8 @@ class LazygitWindows(WindowsPackage):
                 timeout=5
             )
             if result.returncode == 0:
-                # Extract version from output like "version=0.40.2"
-                match = re.search(r'version[=\s]+v?(\S+)', result.stdout)
+                # Extract version from output like "bat 0.26.1"
+                match = re.search(r'bat\s+(\S+)', result.stdout)
                 if match:
                     return match.group(1)
         except Exception as e:
@@ -286,7 +291,7 @@ class LazygitWindows(WindowsPackage):
     @classmethod
     def on_env_activate(cls):
         """Called when the pulsar environment is activated"""
-        cls.logger.info("Lazygit environment activated")
+        cls.logger.info("bat environment activated")
 
     @classmethod
     def install(
@@ -295,44 +300,48 @@ class LazygitWindows(WindowsPackage):
             reinstall: bool = False,
             refresh_cache: bool = False
     ):
-        """Install lazygit to the Pulsar bin directory"""
+        """Install bat to the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit.exe'
+        binary_path = bin_dir / 'bat.exe'
 
         # Check if already installed
         if cls.is_installed_with_pulsar() and not reinstall:
             cls.set_status("Already installed", "green")
-            cls.logger.info("Lazygit is already installed")
+            cls.logger.info("bat is already installed")
             return
 
         cls.set_status("Initializing")
-        cls.logger.info("Starting Lazygit installation")
+        cls.logger.info("Starting bat installation")
 
         # Determine version to install
         if version is None:
             cls.logger.info("Fetching latest version from GitHub...")
             version = cls.get_latest_version()
 
+        # Ensure version has 'v' prefix
+        if not version.startswith('v'):
+            version = f'v{version}'
+
         cls.logger.info(f"Installing version: {version}")
 
         # Build download URL based on architecture
-        # Format: https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Windows_x86_64.zip
-        # or:     https://github.com/jesseduffield/lazygit/releases/download/v0.40.2/lazygit_0.40.2_Windows_arm64.zip
+        # Format: https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-pc-windows-msvc.zip
+        # or:     https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-pc-windows-msvc.zip
         if pulsar_env.ARCH == 'x86_64':
-            arch_name = 'x86_64'
+            arch_target = 'x86_64-pc-windows-msvc'
         elif pulsar_env.ARCH == 'aarch64':
-            arch_name = 'arm64'
+            arch_target = 'aarch64-pc-windows-msvc'
         else:
             raise RuntimeError(f"Unsupported architecture: {pulsar_env.ARCH}")
 
-        filename = f"lazygit_{version}_Windows_{arch_name}.zip"
-        url = f"https://github.com/jesseduffield/lazygit/releases/download/v{version}/{filename}"
+        filename = f"bat-{version}-{arch_target}.zip"
+        url = f"https://github.com/sharkdp/bat/releases/download/{version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename
-        temp_extract_dir = cls.CACHE_DIR / f"lazygit-extract-{version}"
+        temp_extract_dir = cls.CACHE_DIR / f"bat-extract-{version}"
 
         try:
             # Check if download is already cached
@@ -371,21 +380,22 @@ class LazygitWindows(WindowsPackage):
             with zipfile.ZipFile(download_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_extract_dir)
 
-            # Find the lazygit binary
+            # Find the bat binary
             cls.set_status("Installing", "cyan")
-            cls.logger.info("Installing lazygit binary")
+            cls.logger.info("Installing bat binary")
 
-            lazygit_binary = temp_extract_dir / "lazygit.exe"
-            if not lazygit_binary.exists():
-                raise RuntimeError("Could not find lazygit.exe in archive")
+            # The archive extracts to bat-{version}-{arch_target}/bat.exe
+            bat_binary = temp_extract_dir / f"bat-{version}-{arch_target}" / "bat.exe"
+            if not bat_binary.exists():
+                raise RuntimeError("Could not find bat.exe in archive")
 
             # Create bin directory if it doesn't exist
             bin_dir.mkdir(parents=True, exist_ok=True)
 
             # Copy binary
             import shutil
-            cls.logger.info(f"Installing lazygit to {binary_path}")
-            shutil.copy2(str(lazygit_binary), str(binary_path))
+            cls.logger.info(f"Installing bat to {binary_path}")
+            shutil.copy2(str(bat_binary), str(binary_path))
 
             # Cleanup temporary extraction directory
             cls.set_status("Cleaning up")
@@ -393,7 +403,7 @@ class LazygitWindows(WindowsPackage):
             shutil.rmtree(temp_extract_dir)
 
             cls.set_status("Complete", "green")
-            cls.logger.info(f"Lazygit installed successfully to {binary_path}")
+            cls.logger.info(f"bat installed successfully to {binary_path}")
 
         except Exception as e:
             cls.set_status("Error", "bold red")
@@ -406,16 +416,16 @@ class LazygitWindows(WindowsPackage):
 
     @classmethod
     def uninstall(cls):
-        """Uninstall lazygit from the Pulsar bin directory"""
+        """Uninstall bat from the Pulsar bin directory"""
         if not pulsar_env.PULSAR_BIN_DIR:
             raise RuntimeError("PULSAR_BIN_DIR is not set")
 
         if not cls.is_installed_with_pulsar():
-            cls.logger.info("Lazygit is not installed with Pulsar")
+            cls.logger.info("bat is not installed with Pulsar")
             return
 
         bin_dir = Path(pulsar_env.PULSAR_BIN_DIR)
-        binary_path = bin_dir / 'lazygit.exe'
+        binary_path = bin_dir / 'bat.exe'
 
         try:
             if binary_path.exists():
@@ -424,4 +434,3 @@ class LazygitWindows(WindowsPackage):
         except Exception as e:
             cls.logger.error(f"Failed to uninstall: {e}")
             raise
-

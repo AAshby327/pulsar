@@ -189,7 +189,7 @@ def activate(
 
     # Generate and output the activation script
     if shell == 'bash':
-        
+
         # Environment variables
         for name, value in pulsar_env.env_vars.items():
             # Escape quotes in value
@@ -200,6 +200,12 @@ def activate(
         for path in pulsar_env.path_entries:
             escaped_path = path.replace('"', '\\"')
             lines.append(f'export PATH="{escaped_path}:$PATH"')
+
+        # Source files
+        for source_file in pulsar_env.source_files:
+            # Check if file exists before sourcing
+            escaped_file = source_file.replace('"', '\\"')
+            lines.append(f'if [[ -f "{escaped_file}" ]]; then source "{escaped_file}"; fi')
 
     else:  # powershell
         # Environment variables
@@ -212,6 +218,12 @@ def activate(
         for path in pulsar_env.path_entries:
             escaped_path = path.replace('"', '`"')
             lines.append(f'$env:PATH = "{escaped_path};$env:PATH"')
+
+        # Source files (PowerShell uses dot-sourcing)
+        for source_file in pulsar_env.source_files:
+            # Check if file exists before sourcing
+            escaped_file = source_file.replace('"', '`"')
+            lines.append(f'if (Test-Path "{escaped_file}") {{ . "{escaped_file}" }}')
 
     script = '\n'.join(lines)
 

@@ -11,9 +11,99 @@ from package_classes import LinuxPackage, WindowsPackage
 import pulsar_env
 
 
+
+
+
 class WeztermLinux(LinuxPackage):
     name = 'wezterm'
     description = 'GPU-accelerated terminal emulator'
+
+    @staticmethod
+    def detect_linux_distro():
+        """
+        Detect Linux distribution and version from /etc/os-release.
+        Returns tuple of (distro_name, version_id) or None if cannot detect.
+        """
+        try:
+            os_release_path = Path('/etc/os-release')
+            if not os_release_path.exists():
+                return None
+
+            distro_info = {}
+            with open(os_release_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        # Remove quotes
+                        value = value.strip('"').strip("'")
+                        distro_info[key] = value
+
+            distro_id = distro_info.get('ID', '').lower()
+            version_id = distro_info.get('VERSION_ID', '')
+
+            return (distro_id, version_id)
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_wezterm_distro_suffix():
+        """
+        Get the appropriate wezterm distro suffix based on detected distro.
+        Returns tuple of (suffix, is_appimage) or uses AppImage as fallback.
+
+        Examples:
+            Ubuntu 22.04 -> ('Ubuntu22.04', False)
+            Debian 12 -> ('Debian12', False)
+            Unknown -> ('Ubuntu20.04', True)  # AppImage fallback
+        """
+        distro_info = WeztermLinux.detect_linux_distro()
+
+        if not distro_info:
+            # Fallback to AppImage for unknown distros
+            return ('Ubuntu20.04', True)
+
+        distro_id, version_id = distro_info
+
+        # Map distro to wezterm naming
+        if distro_id == 'ubuntu':
+            # Map Ubuntu versions to available wezterm builds
+            if version_id.startswith('24'):
+                return ('Ubuntu22.04', False)  # Use 22.04 for 24.x
+            elif version_id.startswith('22'):
+                return ('Ubuntu22.04', False)
+            elif version_id.startswith('20'):
+                return ('Ubuntu20.04', False)
+            else:
+                return ('Ubuntu20.04', False)  # Older versions use 20.04
+
+        elif distro_id == 'debian':
+            # Map Debian versions
+            if version_id.startswith('12') or int(version_id.split('.')[0]) >= 12:
+                return ('Debian12', False)
+            elif version_id.startswith('11'):
+                return ('Debian11', False)
+            elif version_id.startswith('10'):
+                return ('Debian10', False)
+            else:
+                return ('Debian10', False)  # Older versions
+
+        elif distro_id == 'fedora':
+            # Fedora builds available - use generic Fedora name
+            # Note: wezterm uses format like "Fedora39" but we'll need to check what's available
+            return (f'Fedora{version_id}', False)
+
+        elif distro_id in ['centos', 'rhel', 'rocky', 'almalinux']:
+            # RHEL-based distros - try Fedora builds
+            major_version = version_id.split('.')[0]
+            return (f'Fedora{major_version}', False)
+
+        elif distro_id in ['arch', 'manjaro', 'endeavouros']:
+            # Arch-based distros - use AppImage for maximum compatibility
+            return ('Ubuntu20.04', True)
+
+        else:
+            raise OSError(f"Distribution not supported: {distro_id}")
 
     @classmethod
     def get_latest_version(cls) -> str:
@@ -114,10 +204,21 @@ class WeztermLinux(LinuxPackage):
 
         cls.logger.info(f"Installing version: {version}")
 
-        # Build download URL
-        # Format: https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd.Ubuntu22.04.tar.xz
-        filename = f"wezterm-{version}.Ubuntu22.04.tar.xz"
+        # Detect distro and get appropriate build
+        distro_suffix, is_appimage = cls.get_wezterm_distro_suffix()
+        cls.logger.info(f"Detected distro suffix: {distro_suffix}, AppImage: {is_appimage}")
+
+        # Build download URL based on format
+        if is_appimage:
+            # AppImage format: WezTerm-{version}-Ubuntu20.04.AppImage
+            filename = f"WezTerm-{version}-{distro_suffix}.AppImage"
+        else:
+            # Tar.xz format: wezterm-{version}.Ubuntu22.04.tar.xz
+            # For ARM64, format is: wezterm-{version}.Ubuntu22.04.arm64.deb (but we use tar.xz)
+            filename = f"wezterm-{version}.{distro_suffix}.tar.xz"
+
         url = f"https://github.com/wez/wezterm/releases/download/{version}/{filename}"
+        cls.logger.info(f"Download URL: {url}")
 
         download_path = cls.CACHE_DIR / filename
 
@@ -146,65 +247,77 @@ class WeztermLinux(LinuxPackage):
 
                 cls.download(url, download_path)
 
-            # Extract to temporary directory
-            cls.set_status("Extracting", "cyan")
-            cls.logger.info(f"Extracting archive")
-
-            # Clean temp directory if it exists
-            if temp_extract_dir.exists():
-                import shutil
-                shutil.rmtree(temp_extract_dir)
-
-            temp_extract_dir.mkdir(parents=True, exist_ok=True)
-
-            # Extract tar.xz file
-            with tarfile.open(download_path, 'r:xz') as tar:
-                tar.extractall(temp_extract_dir)
-
-            # Find the wezterm binaries directory in the extracted files
-            cls.set_status("Installing", "cyan")
-            cls.logger.info("Finding wezterm binaries")
-
-            wezterm_bin_dir = None
-            for potential_dir in temp_extract_dir.rglob("bin"):
-                # Look for the usr/bin directory containing wezterm binaries
-                if potential_dir.is_dir() and (potential_dir / "wezterm").exists():
-                    wezterm_bin_dir = potential_dir
-                    break
-
-            if not wezterm_bin_dir:
-                raise RuntimeError("Could not find wezterm binaries in archive")
-
-            cls.logger.info(f"Found binaries at {wezterm_bin_dir}")
-
             # Create bin directory if it doesn't exist
             bin_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy all wezterm-related binaries
-            cls.set_status("Installing binaries")
             import shutil
 
-            wezterm_binaries = [
-                "wezterm",
-                "wezterm-gui",
-                "wezterm-mux-server",
-                "open-wezterm-here",
-                "strip-ansi-escapes"
-            ]
+            if is_appimage:
+                # AppImage doesn't need extraction - just copy and make executable
+                cls.set_status("Installing", "cyan")
+                cls.logger.info("Installing AppImage")
 
-            for binary_name in wezterm_binaries:
-                src_binary = wezterm_bin_dir / binary_name
-                if src_binary.exists():
-                    dst_binary = bin_dir / binary_name
-                    cls.logger.info(f"Installing {binary_name} to {dst_binary}")
-                    shutil.copy2(str(src_binary), str(dst_binary))
-                    # Make binary executable
-                    dst_binary.chmod(0o755)
+                cls.logger.info(f"Copying AppImage to {binary_path}")
+                shutil.copy2(str(download_path), str(binary_path))
+                # Make AppImage executable
+                binary_path.chmod(0o755)
+                cls.logger.info("AppImage installed and made executable")
 
-            # Cleanup temporary extraction directory
-            cls.set_status("Cleaning up")
-            cls.logger.info("Removing temporary files")
-            shutil.rmtree(temp_extract_dir)
+            else:
+                # Extract tar.xz file
+                cls.set_status("Extracting", "cyan")
+                cls.logger.info(f"Extracting archive")
+
+                # Clean temp directory if it exists
+                if temp_extract_dir.exists():
+                    shutil.rmtree(temp_extract_dir)
+
+                temp_extract_dir.mkdir(parents=True, exist_ok=True)
+
+                # Extract tar.xz file
+                with tarfile.open(download_path, 'r:xz') as tar:
+                    tar.extractall(temp_extract_dir)
+
+                # Find the wezterm binaries directory in the extracted files
+                cls.set_status("Installing", "cyan")
+                cls.logger.info("Finding wezterm binaries")
+
+                wezterm_bin_dir = None
+                for potential_dir in temp_extract_dir.rglob("bin"):
+                    # Look for the usr/bin directory containing wezterm binaries
+                    if potential_dir.is_dir() and (potential_dir / "wezterm").exists():
+                        wezterm_bin_dir = potential_dir
+                        break
+
+                if not wezterm_bin_dir:
+                    raise RuntimeError("Could not find wezterm binaries in archive")
+
+                cls.logger.info(f"Found binaries at {wezterm_bin_dir}")
+
+                # Copy all wezterm-related binaries
+                cls.set_status("Installing binaries")
+
+                wezterm_binaries = [
+                    "wezterm",
+                    "wezterm-gui",
+                    "wezterm-mux-server",
+                    "open-wezterm-here",
+                    "strip-ansi-escapes"
+                ]
+
+                for binary_name in wezterm_binaries:
+                    src_binary = wezterm_bin_dir / binary_name
+                    if src_binary.exists():
+                        dst_binary = bin_dir / binary_name
+                        cls.logger.info(f"Installing {binary_name} to {dst_binary}")
+                        shutil.copy2(str(src_binary), str(dst_binary))
+                        # Make binary executable
+                        dst_binary.chmod(0o755)
+
+                # Cleanup temporary extraction directory
+                cls.set_status("Cleaning up")
+                cls.logger.info("Removing temporary files")
+                shutil.rmtree(temp_extract_dir)
 
             # Optionally remove download file if not using cache
             if not pulsar_env.PULSAR_CACHE_DIR and download_path.exists():

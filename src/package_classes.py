@@ -1,4 +1,5 @@
 import os
+import json
 
 import abc
 import typing
@@ -11,6 +12,7 @@ from rich.progress import Progress, DownloadColumn, BarColumn, TransferSpeedColu
 
 
 import pulsar_env
+import github_api_cache
 
 class LastLogHandler(logging.Handler):
     """Handler that stores the most recent log record."""
@@ -92,6 +94,35 @@ class _PulsarPackage(abc.ABC):
     def set_status(cls, status: str, style: str | None = None):
         cls.status = status
         cls.status_style = style if style else ''
+
+    @staticmethod
+    def fetch_github_api(url: str, timeout: int = 10) -> dict:
+        """
+        Fetch data from GitHub API with caching to avoid rate limits.
+
+        Args:
+            url: GitHub API URL
+            timeout: Request timeout in seconds
+
+        Returns:
+            JSON response as a dictionary
+
+        Raises:
+            Exception: If the request fails
+        """
+        # Check cache first
+        cached_response = github_api_cache.get_cached_response(url)
+        if cached_response is not None:
+            return cached_response
+
+        # Fetch from API
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            data = json.loads(response.read().decode())
+
+        # Cache the response
+        github_api_cache.cache_response(url, data)
+
+        return data
 
     @classmethod
     def download(cls, url: str, destination: str | Path, chunk_size: int = 8192) -> Path:

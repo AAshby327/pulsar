@@ -228,10 +228,19 @@ class GitWindows(WindowsPackage):
 
         cls.logger.info(f"Installing version: {version}")
 
+        # Determine architecture
+        if pulsar_env.ARCH == 'x86_64':
+            arch_suffix = '64-bit'
+        elif pulsar_env.ARCH == 'aarch64':
+            arch_suffix = 'arm64'
+        else:
+            raise RuntimeError(f"Unsupported architecture: {pulsar_env.ARCH}")
+
         # Build download URL for PortableGit
         # Format: https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/PortableGit-2.43.0-64-bit.7z.exe
+        # or:     https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/PortableGit-2.43.0-arm64.7z.exe
         windows_version = f"{version}.windows.1"
-        filename = f"PortableGit-{version}-64-bit.7z.exe"
+        filename = f"PortableGit-{version}-{arch_suffix}.7z.exe"
         url = f"https://github.com/git-for-windows/git/releases/download/v{windows_version}/{filename}"
 
         download_path = cls.CACHE_DIR / filename

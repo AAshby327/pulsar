@@ -149,6 +149,7 @@ UV_CACHE_DIR = _get_env_or_default(
 
 env_vars: dict[str, str] = {}
 path_entries: list[str] = []
+source_files: list[str] = []
 
 def set_env(name: str, value: str):
     """Set an environment variable.
@@ -169,6 +170,15 @@ def add_to_path(directory: str):
     """
     if directory not in path_entries:
         path_entries.append(directory)
+
+def add_source_file(file_path: str):
+    """Add a shell script file to be sourced during activation.
+
+    Args:
+        file_path: Path to the shell script file to source
+    """
+    if file_path not in source_files:
+        source_files.append(file_path)
 
 # class ActivationState:
 #     """Accumulates environment changes for shell activation scripts."""
