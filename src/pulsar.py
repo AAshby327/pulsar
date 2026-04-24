@@ -201,11 +201,13 @@ def activate(
             escaped_path = path.replace('"', '\\"')
             lines.append(f'export PATH="{escaped_path}:$PATH"')
 
-        # Source files
+        # Source files (only bash/sh files for bash)
         for source_file in pulsar_env.source_files:
-            # Check if file exists before sourcing
-            escaped_file = source_file.replace('"', '\\"')
-            lines.append(f'if [[ -f "{escaped_file}" ]]; then source "{escaped_file}"; fi')
+            # Filter by file extension - only include bash/sh files for bash
+            if source_file.endswith(('.bash', '.sh')):
+                # Check if file exists before sourcing
+                escaped_file = source_file.replace('"', '\\"')
+                lines.append(f'if [[ -f "{escaped_file}" ]]; then source "{escaped_file}"; fi')
 
     else:  # powershell
         # Environment variables
@@ -219,11 +221,13 @@ def activate(
             escaped_path = path.replace('"', '`"')
             lines.append(f'$env:PATH = "{escaped_path};$env:PATH"')
 
-        # Source files (PowerShell uses dot-sourcing)
+        # Source files (only .ps1 files for PowerShell)
         for source_file in pulsar_env.source_files:
-            # Check if file exists before sourcing
-            escaped_file = source_file.replace('"', '`"')
-            lines.append(f'if (Test-Path "{escaped_file}") {{ . "{escaped_file}" }}')
+            # Filter by file extension - only include .ps1 files for PowerShell
+            if source_file.endswith('.ps1'):
+                # Check if file exists before sourcing
+                escaped_file = source_file.replace('"', '`"')
+                lines.append(f'if (Test-Path "{escaped_file}") {{ . "{escaped_file}" }}')
 
     script = '\n'.join(lines)
 

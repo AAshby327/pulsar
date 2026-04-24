@@ -9,6 +9,8 @@ Pulsar is a portable Python-based package manager for development tools. It inst
 ## Commands
 
 ### Development Setup
+
+**Linux/macOS (Bash):**
 ```bash
 # Activate the Pulsar environment (sets up env vars and adds bin/ to PATH)
 source activate
@@ -21,6 +23,27 @@ pulsar uninstall wezterm --yes
 pulsar clean
 pulsar dashboard  # Launch system monitoring dashboard
 ```
+
+**Windows (PowerShell):**
+```powershell
+# First time only - Unblock the script (if you get an execution policy error)
+Unblock-File -Path .\activate.ps1
+
+# Activate the Pulsar environment
+. .\activate.ps1
+
+# Run Pulsar CLI (after activation)
+pulsar --help
+pulsar install wezterm
+pulsar list
+pulsar uninstall wezterm --yes
+pulsar clean
+```
+
+**Note:** If you encounter "execution policy" errors on Windows, you need to either:
+1. Unblock the script: `Unblock-File -Path .\activate.ps1` (recommended)
+2. Set execution policy: `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` (in admin PowerShell)
+3. Bypass for current session: `powershell -ExecutionPolicy Bypass` then `. .\activate.ps1`
 
 ### Python Environment
 ```bash

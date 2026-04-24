@@ -87,13 +87,13 @@ function global:pulsar {
         . "$env:PULSAR_ROOT\activate.ps1"
         return
     } elseif ($args[0] -eq "reset") {
-        Write-Host "⚠️  This will delete bin, and src\.venv in $env:PULSAR_ROOT"
+        Write-Host "This will delete bin, and src\.venv in $env:PULSAR_ROOT"
         $confirm = Read-Host "Are you sure? (yes/no)"
         if ($confirm -eq "yes") {
-            Write-Host "🔄 Resetting Pulsar environment..."
+            Write-Host "Resetting Pulsar environment..."
             Set-Location $env:PULSAR_ROOT
             Remove-Item -Recurse -Force -ErrorAction SilentlyContinue bin, src\.venv
-            Write-Host "✓ Directories deleted, re-activating..."
+            Write-Host "Directories deleted, re-activating..."
             . "$env:PULSAR_ROOT\activate.ps1"
             return
         } else {

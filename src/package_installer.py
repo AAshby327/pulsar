@@ -177,7 +177,8 @@ class PackageInstaller:
                 live.update(self.create_display())
 
             # Track which packages are completed
-            completed = set()
+            # Initialize with packages that were already installed (skipped)
+            completed = set(packages_to_skip)
             error_occurred = False
 
             # Create batches of packages that can be installed in parallel
@@ -225,8 +226,12 @@ class PackageInstaller:
                 while len(completed) < len(sorted_packages) and not error_occurred:
                     ready = get_ready_packages()
 
+                    # DEBUG
+                    console.log(f"[DEBUG] Completed: {completed}, Total: {len(sorted_packages)}, Ready: {[p.name for p in ready]}")
+
                     if not ready:
                         # No packages ready but not all completed - circular dependency or error
+                        console.log(f"[DEBUG] No packages ready, breaking")
                         break
 
                     # Submit all ready packages
