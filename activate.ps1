@@ -42,34 +42,18 @@ if (-not (Test-Path $uvPath)) {
 
         # Download installer script to cache if not present
         if (-not (Test-Path $cachedInstaller)) {
-            $installerContent = irm https://astral.sh/uv/install.ps1
+            $installerContent = Invoke-RestMethod https://astral.sh/uv/install.ps1
             $installerContent | Out-File -FilePath $cachedInstaller -Encoding UTF8
         }
 
         # Run cached installer script
         & $cachedInstaller
+
+        & $uvPath sync --directory $env:PULSAR_SRC_DIR
     } catch {
         Write-Host "[ERROR] Failed to install uv: $_" -ForegroundColor Red
         throw
     }
-}
-
-# Install pulsar system packages (only if needed)
-$venvPython = "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe"
-$needsSync = $false
-
-if (-not (Test-Path $venvPython)) {
-    $needsSync = $true
-} else {
-    # Check if required packages are installed by trying to import them
-    $importCheck = & $venvPython -c "import rich, typer" 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        $needsSync = $true
-    }
-}
-
-if ($needsSync) {
-    & $uvPath sync --directory $env:PULSAR_SRC_DIR
 }
 
 # Add bin directory to PATH
@@ -87,7 +71,7 @@ function global:pulsar {
         . "$env:PULSAR_ROOT\activate.ps1"
         return
     } elseif ($args[0] -eq "reset") {
-        Write-Host "This will delete bin, and src\.venv in $env:PULSAR_ROOT"
+        Write-Host "WARNING: This will delete bin, and src\.venv in $env:PULSAR_ROOT" -ForegroundColor Yellow
         $confirm = Read-Host "Are you sure? (yes/no)"
         if ($confirm -eq "yes") {
             Write-Host "Resetting Pulsar environment..."
@@ -98,6 +82,18 @@ function global:pulsar {
             return
         } else {
             Write-Host "Reset cancelled"
+        }
+    } elseif ($args[0] -eq "nuke") {
+        Write-Host "WARNING: This will delete .cache, .local, bin, src\.venv, and __pycache__ in $env:PULSAR_ROOT" -ForegroundColor Red
+        $confirm = Read-Host "Are you sure? (yes/no)"
+        if ($confirm -eq "yes") {
+            Write-Host "Nuking Pulsar environment..."
+            Set-Location $env:PULSAR_ROOT
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue .cache, .local, bin, src\.venv
+            Get-ChildItem -Path . -Filter "__pycache__" -Recurse -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        } else {
+            Write-Host "Nuke cancelled"
         }
     } else {
         & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" $args

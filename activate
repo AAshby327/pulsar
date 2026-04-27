@@ -41,22 +41,7 @@ if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
 
     # Run cached installer script
     sh "${CACHED_INSTALLER}"
-fi
 
-# Install pulsar system packages (only if needed)
-VENV_PYTHON="${PULSAR_SRC_DIR}/.venv/bin/python"
-NEEDS_SYNC=false
-
-if [[ ! -f "${VENV_PYTHON}" ]]; then
-    NEEDS_SYNC=true
-else
-    # Check if required packages are installed by trying to import them
-    if ! "${VENV_PYTHON}" -c "import rich, typer" 2>/dev/null; then
-        NEEDS_SYNC=true
-    fi
-fi
-
-if [[ "${NEEDS_SYNC}" == "true" ]]; then
     ${PULSAR_BIN_DIR}/uv sync --directory "${PULSAR_SRC_DIR}"
 fi
 
@@ -69,16 +54,27 @@ pulsar() {
     if [[ "$1" == "reload" ]]; then
         source "${PULSAR_ROOT}/activate"
     elif [[ "$1" == "reset" ]]; then
-        echo "⚠️  This will delete bin, and src/.venv in ${PULSAR_ROOT}"
+        echo "WARNING: This will delete bin, and src/.venv in ${PULSAR_ROOT}"
         read -p "Are you sure? (yes/no): " confirm
         if [[ "$confirm" == "yes" ]]; then
-            echo "🔄 Resetting Pulsar environment..."
+            echo "Resetting Pulsar environment..."
             cd "${PULSAR_ROOT}"
             rm -rf bin src/.venv
-            echo "✓ Directories deleted, re-activating..."
+            echo "Directories deleted, re-activating..."
             source "${PULSAR_ROOT}/activate"
         else
             echo "Reset cancelled"
+        fi
+    elif [[ "$1" == "nuke" ]]; then
+        echo "WARNING: This will delete .cache, .local, bin, src/.venv, and __pycache__ in ${PULSAR_ROOT}"
+        read -p "Are you sure? (yes/no): " confirm
+        if [[ "$confirm" == "yes" ]]; then
+            echo "Nuking Pulsar environment..."
+            cd "${PULSAR_ROOT}"
+            rm -rf .cache .local bin src/.venv
+            find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+        else
+            echo "Nuke cancelled"
         fi
     else
         # Pass through other commands normally
