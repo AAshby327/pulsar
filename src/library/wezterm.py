@@ -4,7 +4,7 @@ beep boop.
 
 """
 
-from library import SpellBook
+from spell_book_class import SpellBook
 
 wezterm_book = SpellBook('wezterm')
 

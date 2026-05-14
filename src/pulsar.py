@@ -36,9 +36,9 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-library.SpellBook.import_all()
+library.import_all()
 
-for spell_book in library.SpellBook.CATALOG.values():
+for spell_book in library.catalog.values():
     app.add_typer(spell_book.typer_app, rich_help_panel='Spell Books')
 
 

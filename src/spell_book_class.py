@@ -14,8 +14,6 @@ _DECORATOR_INPUT = typing.TypeVar("_DECORATOR_INPUT", bound=typing.Callable)
 
 class SpellBook:
 
-    CATALOG: dict[str, 'SpellBook'] = dict()
-
     name: str
     script: str
 
@@ -26,24 +24,6 @@ class SpellBook:
     on_activate_spell: typing.Callable
 
     typer_app: typer.Typer
-
-    @staticmethod
-    def import_all():
-        library_path = pulsar_env.PULSAR_SRC_DIR / 'library'
-        
-        for module in library_path.iterdir():
-
-            if module.name == '__init__.py' \
-            or module.is_file() and module.suffix != '.py' \
-            or module.is_dir() and not (module / '__init__.py').exists() \
-            or module.name in sys.modules:
-                continue
-
-            try:
-                importlib.import_module(f'library.{module.stem}')
-            except Exception as e:
-                SpellBook.CATALOG.pop(module.stem, None)
-                BrokenSpellBook(module.stem, e, rich.traceback.Traceback())
 
     def __init__(self, name: str, help: str | None = None):
         self.name = name
@@ -64,7 +44,9 @@ class SpellBook:
         self.uninstaller_spell = None
         self.on_activate_spell = None
 
-        SpellBook.CATALOG[self.name] = self
+        import library
+
+        library.catalog[self.name] = self
 
     def installer(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
         assert not _has_required_args(func)
