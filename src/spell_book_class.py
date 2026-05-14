@@ -1,13 +1,10 @@
-import sys
 import typing
 import logging
 import inspect
-import importlib
 
 import typer
 import rich.traceback
 
-import pulsar_env
 import pulsar_console
 
 _DECORATOR_INPUT = typing.TypeVar("_DECORATOR_INPUT", bound=typing.Callable)
@@ -19,13 +16,20 @@ class SpellBook:
 
     logger: logging.Logger
 
-    installer_spell: typing.Callable
-    uninstaller_spell: typing.Callable
-    on_activate_spell: typing.Callable
+    dependencies: list[typing.Union['SpellBook', str]]
+
+    _installer_spell: typing.Callable
+    _uninstaller_spell: typing.Callable
+    _on_activate_spell: typing.Callable
 
     typer_app: typer.Typer
 
-    def __init__(self, name: str, help: str | None = None):
+    def __init__(
+        self, 
+        name: str, 
+        help: str | None = None,
+        dependencies: list[typing.Union['SpellBook', str]] | None = None,
+    ):
         self.name = name
         caller_frame = inspect.stack()[1]
         self.script = caller_frame.filename
@@ -35,34 +39,39 @@ class SpellBook:
         if help is None: 
             help = caller_frame.frame.f_globals.get('__doc__', '')
 
+        self.dependencies = dependencies if dependencies is not None else []
+
         self.typer_app = typer.Typer(
             name=self.name, 
             help=help,
         )
 
-        self.installer_spell = None
-        self.uninstaller_spell = None
-        self.on_activate_spell = None
+        self._installer_spell = None
+        self._uninstaller_spell = None
+        self._on_activate_spell = None
 
         import library
 
         library.catalog[self.name] = self
 
+    def __repr__(self):
+        return f"<SpellBooK: {self.name}>"
+
     def installer(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
         assert not _has_required_args(func)
-        self.installer_spell = func
+        self._installer_spell = func
         self.typer_app.command('install')(func)
         return func
     
     def uninstaller(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
         assert not _has_required_args(func)
-        self.uninstaller_spell = func
+        self._uninstaller_spell = func
         self.typer_app.command('uninstall')(func)
         return func
     
     def on_activate(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
         assert not _has_required_args(func)
-        self.on_activate_spell = func
+        self._on_activate_spell = func
         return func
 
 class BrokenSpellBook(SpellBook):
