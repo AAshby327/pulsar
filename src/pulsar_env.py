@@ -10,20 +10,16 @@ All variables use environment variables if set, otherwise fall back to defaults.
 import os
 import typing
 import platform
-from pathlib import Path
-
+import pathlib
 
 # ============================================================================
 # System Detection
 # ============================================================================
 
-OS: typing.Literal['linux', 'windows']
 ARCH: typing.Literal['x86_64', 'aarch64']
-
-# Detect operating system
-OS = platform.system().lower()
-if OS not in ['linux', 'windows']:
-    raise RuntimeError(f"Unsupported operating system: {OS}")
+OS: typing.Literal['linux', 'windows']
+LINUX_DISTRO: str | None
+SHELL: str | None
 
 # Detect architecture
 machine = platform.machine().lower()
@@ -34,14 +30,53 @@ elif machine in ['aarch64', 'arm64']:
 else:
     raise RuntimeError(f"Unsupported architecture: {machine}")
 
+# Detect operating system
+OS = platform.system().lower()
+if OS not in ['linux', 'windows']:
+    raise RuntimeError(f"Unsupported operating system: {OS}")
+
+# Detect Linux distribution
+if OS == 'linux':
+    try:
+        os_release = platform.freedesktop_os_release()
+        LINUX_DISTRO = os_release.get('ID', 'unknown')
+    except (OSError, AttributeError):
+        LINUX_DISTRO = 'unknown'
+else:
+    LINUX_DISTRO = None
+
+# Detect shell environment
+"""Detect the current shell across different operating systems."""
+
+# Unix/Linux: Check SHELL environment variable
+shell_path = os.environ.get('SHELL')
+if shell_path:
+    SHELL = pathlib.Path(shell_path).name
+
+# Windows: Check for PowerShell
+# PSModulePath is set by both PowerShell Core (pwsh) and Windows PowerShell
+elif 'PSModulePath' in os.environ and 'POWERSHELL_DISTRIBUTION_CHANNEL' in os.environ:
+        SHELL = 'powershell' 
+
+# Windows: Check for Command Prompt (cmd.exe)
+else:
+
+    comspec = os.environ.get('COMSPEC', '')
+    if 'cmd.exe' in comspec.lower():
+        SHELL = 'cmd'
+    else:
+        # If we still can't detect, return None
+        SHELL = None
+
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
-def _get_env_or_default(var_name: str, default_path: str) -> str:
-    """Get environment variable or return default path."""
-    return os.environ.get(var_name) or default_path
+def _get_env_or_default(var_name: str, default_path: pathlib.Path) -> pathlib.Path:
+    """Get environment variable or return default path as pathlib.Path."""
+    env_value = os.environ.get(var_name)
+    return pathlib.Path(env_value) if env_value else default_path
 
 
 # ============================================================================
@@ -50,8 +85,8 @@ def _get_env_or_default(var_name: str, default_path: str) -> str:
 
 # PULSAR_ROOT: Base directory for Pulsar
 # Default: Current working directory
-PULSAR_ROOT = os.environ.get('PULSAR_ROOT') or os.getcwd()
-PULSAR_ROOT = str(Path(PULSAR_ROOT).resolve())
+_pulsar_root_str = os.environ.get('PULSAR_ROOT') or os.getcwd()
+PULSAR_ROOT = pathlib.Path(_pulsar_root_str).resolve()
 
 
 # ============================================================================
@@ -62,32 +97,32 @@ PULSAR_ROOT = str(Path(PULSAR_ROOT).resolve())
 
 PULSAR_BIN_DIR = _get_env_or_default(
     'PULSAR_BIN_DIR',
-    os.path.join(PULSAR_ROOT, 'bin')
+    PULSAR_ROOT / 'bin'
 )
 
 PULSAR_SRC_DIR = _get_env_or_default(
     'PULSAR_SRC_DIR',
-    os.path.join(PULSAR_ROOT, 'src')
+    PULSAR_ROOT / 'src'
 )
 
 PULSAR_CONFIG_DIR = _get_env_or_default(
     'PULSAR_CONFIG_DIR',
-    os.path.join(PULSAR_ROOT, '.config')
+    PULSAR_ROOT / '.config'
 )
 
 PULSAR_CACHE_DIR = _get_env_or_default(
     'PULSAR_CACHE_DIR',
-    os.path.join(PULSAR_ROOT, '.cache')
+    PULSAR_ROOT / '.cache'
 )
 
 PULSAR_DATA_DIR = _get_env_or_default(
     'PULSAR_DATA_DIR',
-    os.path.join(PULSAR_ROOT, '.local', 'share')
+    PULSAR_ROOT / '.local' / 'share'
 )
 
 PULSAR_STATE_DIR = _get_env_or_default(
     'PULSAR_STATE_DIR',
-    os.path.join(PULSAR_ROOT, '.local', 'state')
+    PULSAR_ROOT / '.local' / 'state'
 )
 
 
@@ -95,29 +130,26 @@ PULSAR_STATE_DIR = _get_env_or_default(
 # XDG Base Directory Specification
 # ============================================================================
 
-# Standard Linux/Unix directory locations
-# See: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-
-HOME = os.path.expanduser('~')
+HOME = pathlib.Path.home()
 
 XDG_CONFIG_HOME = _get_env_or_default(
     'XDG_CONFIG_HOME',
-    os.path.join(HOME, '.config')
+    HOME / '.config'
 )
 
 XDG_CACHE_HOME = _get_env_or_default(
     'XDG_CACHE_HOME',
-    os.path.join(HOME, '.cache')
+    HOME / '.cache'
 )
 
 XDG_DATA_HOME = _get_env_or_default(
     'XDG_DATA_HOME',
-    os.path.join(HOME, '.local', 'share')
+    HOME / '.local' / 'share'
 )
 
 XDG_STATE_HOME = _get_env_or_default(
     'XDG_STATE_HOME',
-    os.path.join(HOME, '.local', 'state')
+    HOME / '.local' / 'state'
 )
 
 
@@ -129,17 +161,17 @@ XDG_STATE_HOME = _get_env_or_default(
 
 UV_TOOL_DIR = _get_env_or_default(
     'UV_TOOL_DIR',
-    os.path.join(PULSAR_DATA_DIR, 'uv', 'tools')
+    PULSAR_DATA_DIR / 'uv' / 'tools'
 )
 
 UV_PYTHON_INSTALL_DIR = _get_env_or_default(
     'UV_PYTHON_INSTALL_DIR',
-    os.path.join(PULSAR_DATA_DIR, 'uv', 'python')
+    PULSAR_DATA_DIR / 'uv' / 'python'
 )
 
 UV_CACHE_DIR = _get_env_or_default(
     'UV_CACHE_DIR',
-    os.path.join(PULSAR_CACHE_DIR, 'uv')
+    PULSAR_CACHE_DIR / 'uv'
 )
 
 
@@ -179,112 +211,3 @@ def add_source_file(file_path: str):
     """
     if file_path not in source_files:
         source_files.append(file_path)
-
-# class ActivationState:
-#     """Accumulates environment changes for shell activation scripts."""
-
-#     def __init__(self):
-#         self.env_vars: dict[str, str] = {}
-#         self.path_entries: list[str] = []
-#         self.aliases: dict[str, str] = {}
-
-#     def set_env(self, name: str, value: str):
-#         """Set an environment variable.
-
-#         Args:
-#             name: Environment variable name
-#             value: Environment variable value
-#         """
-#         self.env_vars[name] = value
-
-#     def add_to_path(self, directory: str):
-#         """Add a directory to PATH.
-
-#         Args:
-#             directory: Directory path to add to PATH
-#         """
-#         if directory not in self.path_entries:
-#             self.path_entries.append(directory)
-
-#     def add_alias(self, name: str, command: str):
-#         """Add a shell alias.
-
-#         Args:
-#             name: Alias name
-#             command: Command to alias
-#         """
-#         self.aliases[name] = command
-
-#     def generate_bash_script(self) -> str:
-#         """Generate bash activation script.
-
-#         Returns:
-#             Bash script as a string
-#         """
-#         lines = []
-
-#         # Environment variables
-#         for name, value in self.env_vars.items():
-#             # Escape quotes in value
-#             escaped_value = value.replace('"', '\\"')
-#             lines.append(f'export {name}="{escaped_value}"')
-
-#         # PATH additions (prepend to PATH)
-#         for path in self.path_entries:
-#             escaped_path = path.replace('"', '\\"')
-#             lines.append(f'export PATH="{escaped_path}:$PATH"')
-
-#         # Aliases
-#         for name, command in self.aliases.items():
-#             escaped_command = command.replace('"', '\\"')
-#             lines.append(f'alias {name}="{escaped_command}"')
-
-#         return '\n'.join(lines)
-
-#     def generate_powershell_script(self) -> str:
-#         """Generate PowerShell activation script.
-
-#         Returns:
-#             PowerShell script as a string
-#         """
-#         lines = []
-
-#         # Environment variables
-#         for name, value in self.env_vars.items():
-#             # Escape quotes in value for PowerShell
-#             escaped_value = value.replace('"', '`"')
-#             lines.append(f'$env:{name} = "{escaped_value}"')
-
-#         # PATH additions (prepend to PATH)
-#         for path in self.path_entries:
-#             escaped_path = path.replace('"', '`"')
-#             lines.append(f'$env:PATH = "{escaped_path};$env:PATH"')
-
-#         # Aliases (PowerShell aliases are more limited)
-#         for name, command in self.aliases.items():
-#             # For simple commands, use Set-Alias
-#             # For complex commands, we'd need to create functions instead
-#             escaped_command = command.replace('"', '`"')
-#             lines.append(f'Set-Alias -Name {name} -Value "{escaped_command}"')
-
-#         return '\n'.join(lines)
-
-
-# # Global activation state instance
-# _activation_state = ActivationState()
-
-
-# def get_activation_state() -> ActivationState:
-#     """Get the current activation state.
-
-#     Returns:
-#         The global ActivationState instance
-#     """
-#     return _activation_state
-
-
-# def reset_activation_state():
-#     """Reset the activation state to a clean slate."""
-#     global _activation_state
-#     _activation_state = ActivationState()
-

@@ -1,7 +1,7 @@
 [project]
 name = "pulsar"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.3.0"
+description = "Arcane Dev Env"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -10,4 +10,5 @@ dependencies = [
     "textual>=1.0.0",
     "psutil>=6.1.1",
     "nvidia-ml-py>=13.595.0",
+    "py7zr>=1.1.0",
 ]

@@ -6,8 +6,8 @@ $env:PULSAR_BIN_DIR = Join-Path $PULSAR_ROOT "bin"
 $env:PULSAR_SRC_DIR = Join-Path $PULSAR_ROOT "src"
 $env:PULSAR_CONFIG_DIR = Join-Path $PULSAR_ROOT "config"
 $env:PULSAR_CACHE_DIR = Join-Path $PULSAR_ROOT ".cache"
-$env:PULSAR_DATA_DIR = Join-Path $PULSAR_ROOT ".local\share"
-$env:PULSAR_STATE_DIR = Join-Path $PULSAR_ROOT ".local\state"
+$env:PULSAR_DATA_DIR = Join-Path $PULSAR_ROOT ".data"
+$env:PULSAR_STATE_DIR = Join-Path $PULSAR_ROOT ".state"
 
 # Create directory structure
 New-Item -ItemType Directory -Force -Path $env:PULSAR_BIN_DIR | Out-Null
@@ -27,6 +27,10 @@ $env:XDG_STATE_HOME = $env:PULSAR_STATE_DIR
 $env:UV_TOOL_DIR = "$env:PULSAR_DATA_DIR\uv\tools"
 $env:UV_PYTHON_INSTALL_DIR = "$env:PULSAR_DATA_DIR\uv\python"
 $env:UV_CACHE_DIR = "$env:PULSAR_CACHE_DIR\uv"
+$env:UV_PROJECT_ENVIRONMENT = "$env:PULSAR_ROOT\.venv"
+
+# Set VIRTUAL_ENV to the absolute path to avoid warnings
+$env:VIRTUAL_ENV = "$env:PULSAR_ROOT\.venv"
 
 # Install uv if not already installed
 $uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
@@ -59,7 +63,7 @@ if (-not (Test-Path $uvPath)) {
 # Add bin directory to PATH
 $env:PATH = "$env:PULSAR_BIN_DIR;$env:PATH"
 
-$output = & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" "activate" "--shell" "powershell"
+$output = & "$env:VIRTUAL_ENV\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" "activate"
 if ($output) {
     $outputStr = $output -join "`n"
     Invoke-Expression $outputStr
@@ -70,33 +74,8 @@ function global:pulsar {
     if ($args[0] -eq "reload") {
         . "$env:PULSAR_ROOT\activate.ps1"
         return
-    } elseif ($args[0] -eq "reset") {
-        Write-Host "WARNING: This will delete bin, and src\.venv in $env:PULSAR_ROOT" -ForegroundColor Yellow
-        $confirm = Read-Host "Are you sure? (yes/no)"
-        if ($confirm -eq "yes") {
-            Write-Host "Resetting Pulsar environment..."
-            Set-Location $env:PULSAR_ROOT
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue bin, src\.venv
-            Write-Host "Directories deleted, re-activating..."
-            . "$env:PULSAR_ROOT\activate.ps1"
-            return
-        } else {
-            Write-Host "Reset cancelled"
-        }
-    } elseif ($args[0] -eq "nuke") {
-        Write-Host "WARNING: This will delete .cache, .local, bin, src\.venv, and __pycache__ in $env:PULSAR_ROOT" -ForegroundColor Red
-        $confirm = Read-Host "Are you sure? (yes/no)"
-        if ($confirm -eq "yes") {
-            Write-Host "Nuking Pulsar environment..."
-            Set-Location $env:PULSAR_ROOT
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue .cache, .local, bin, src\.venv
-            Get-ChildItem -Path . -Filter "__pycache__" -Recurse -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-            return
-        } else {
-            Write-Host "Nuke cancelled"
-        }
     } else {
-        & "$env:PULSAR_SRC_DIR\.venv\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" $args
+        & "$env:VIRTUAL_ENV\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" $args
     }
 }
 
