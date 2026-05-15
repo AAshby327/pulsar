@@ -6,6 +6,19 @@ import rich.progress
 
 from spell_book_class import SpellBook, BrokenSpellBook
 
+class _ProgressLogHandler(logging.Handler):
+    """Handler that captures the last log message for progress display."""
+    def __init__(self):
+        super().__init__(level=logging.INFO)
+        self.last_log = ''
+        self.setFormatter(logging.Formatter('%(message)s'))
+
+    def emit(self, record):
+        try:
+            self.last_log = self.format(record)
+        except Exception:
+            self.handleError(record)
+
 _hoard: dict[SpellBook, SummonerGoblin] = dict()
 
 def summon_goblin_worker(spell_book: SpellBook) -> SummonerGoblin | None:
@@ -57,8 +70,16 @@ class SummonerGoblin:
         
         if spell_book.logger:
             self.logger = spell_book.logger
-        else: 
+        else:
             self.logger = logging.getLogger(f'library.{spell_book.name}')
+
+        # Configure logger for progress display
+        self.logger.setLevel(logging.INFO)
+        self.logger.propagate = False  # Don't propagate to parent loggers
+
+        # Add handler immediately so logs are captured from the start
+        self.log_handler = _ProgressLogHandler()
+        self.logger.addHandler(self.log_handler)
 
         self.reinstall_command = reinstall
         self.no_cache_command = no_cache

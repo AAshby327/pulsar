@@ -1,5 +1,4 @@
-import typing 
-import logging
+import typing
 
 import rich.text
 import rich.table
@@ -91,44 +90,20 @@ class PercentColumn(rich.progress.ProgressColumn):
     
 class LogColumn(rich.progress.ProgressColumn):
 
-    class _LastLogHandler(logging.Handler):
-        def __init__(self, logger: logging.Logger):
-            super().__init__(level=logging.INFO)
-            self.last_log = ''
-            self.logger = logger
-
-        def emit(self, record):
-            try:
-                self.last_log = self.format(record)
-            except Exception:
-                self.handleError(record)
-
-        def update_logger(self, new_logger: logging.Logger):
-            self.logger.removeHandler(self)
-            self.logger = new_logger
-            self.logger.addHandler(self)
-
-
     def __init__(
-        self, 
+        self,
         table_column: typing.Optional[rich.table.Column] = None,
     ):
         super().__init__(table_column)
-        self.handlers: dict[SummonerGoblin, LogColumn._LastLogHandler] = dict()
 
     def render(self, task):
         goblin = get_worker_goblin(task)
 
-        if goblin is None: 
+        if goblin is None:
             return ''
-        
-        if goblin in self.handlers:
-            if self.handlers[goblin].logger is not goblin.logger:
-                self.handlers[goblin].update_logger(goblin.logger)
-        else:
-            self.handlers[goblin] = LogColumn._LastLogHandler(goblin.logger)
 
-        lines = self.handlers[goblin].last_log.splitlines()
+        # Read from the goblin's log handler
+        lines = goblin.log_handler.last_log.splitlines()
 
         if len(lines) == 0:
             return ''

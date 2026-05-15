@@ -3,34 +3,38 @@
 Written by https://github.com/wez and implemented in Rust.
 """
 
-import typer
 import shutil
 import urllib.request
 import json
 import subprocess
+import pathlib
+
+import typer
 
 import pulsar_env
 import star_map
 from spell_book_class import SpellBook
+from summoning_circle.summoner_goblin_class import SummonerGoblin
 
 wezterm_book = SpellBook('wezterm')
 
 # Check installation status on module import
-def _check_pulsar_installation():
+def _check_pulsar_installation() -> bool:
     """Check if wezterm is installed in pulsar bin folder."""
     if pulsar_env.OS == 'linux':
         install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
         return install_dir.exists() and (install_dir / 'usr' / 'bin' / 'wezterm').exists()
     elif pulsar_env.OS == 'windows':
-        exe_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm.exe'
+        install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+        exe_path = install_dir / 'wezterm.exe'
         return exe_path.exists()
     return False
 
-def _check_system_installation():
+def _check_system_installation() -> bool:
     """Check if wezterm is installed system-wide."""
     return shutil.which('wezterm') is not None
 
-def _get_installed_version():
+def _get_installed_version() -> str | None:
     """Query wezterm for its version."""
     try:
         result = subprocess.run(
@@ -54,7 +58,7 @@ wezterm_book.installed_with_pulsar = _check_pulsar_installation()
 wezterm_book.installed = wezterm_book.installed_with_pulsar or _check_system_installation()
 wezterm_book.version = _get_installed_version() if wezterm_book.installed else None
 
-def _get_version(goblin, locked_data):
+def _get_version(goblin: SummonerGoblin, locked_data: dict | None) -> str:
     """Get the version to install from star_map or GitHub API."""
     if locked_data and 'version' in locked_data:
         version = locked_data['version']
@@ -70,7 +74,7 @@ def _get_version(goblin, locked_data):
     goblin.logger.info('Latest version: %s', version)
     return version
 
-def _get_download_url(goblin, version, locked_data):
+def _get_download_url(goblin: SummonerGoblin, version: str, locked_data: dict | None) -> tuple[str, str]:
     """Get download URL and filename from cache or GitHub API."""
     platform_data = locked_data.get(pulsar_env.OS) if locked_data else None
 
@@ -107,7 +111,7 @@ def _get_download_url(goblin, version, locked_data):
 
     return url, filename
 
-def _download_file(goblin, url, download_path):
+def _download_file(goblin: SummonerGoblin, url: str, download_path: pathlib.Path) -> None:
     """Download file if needed based on cache settings."""
     if goblin.no_cache_command or not download_path.exists():
         if goblin.no_cache_command:
@@ -118,13 +122,15 @@ def _download_file(goblin, url, download_path):
     else:
         goblin.logger.info('Using cached download: %s', download_path.name)
 
-def _install_linux(download_path, version):
+def _install_linux(goblin: SummonerGoblin, download_path: pathlib.Path, version: str) -> None:
     """Extract and install AppImage on Linux."""
+    goblin.logger.info('Making AppImage executable')
     download_path.chmod(0o755)
 
     extract_dir = wezterm_book.cache_dir / f'wezterm-{version}-extracted'
     extract_dir.mkdir(exist_ok=True)
 
+    goblin.logger.info('Extracting AppImage to %s', extract_dir)
     result = subprocess.run(
         [str(download_path), '--appimage-extract'],
         cwd=extract_dir,
@@ -135,6 +141,7 @@ def _install_linux(download_path, version):
     if result.returncode != 0:
         raise RuntimeError(f'Failed to extract AppImage: {result.stderr}')
 
+    goblin.logger.info('Locating wezterm binary in extracted files')
     squashfs_root = extract_dir / 'squashfs-root'
     wezterm_bin = squashfs_root / 'usr' / 'bin' / 'wezterm'
 
@@ -146,19 +153,29 @@ def _install_linux(download_path, version):
 
     install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
     if install_dir.exists():
+        goblin.logger.info('Removing existing installation')
         shutil.rmtree(install_dir)
+
+    goblin.logger.info('Moving files to %s', install_dir)
     shutil.move(str(squashfs_root), str(install_dir))
 
-def _install_windows(goblin, download_path, version):
+def _install_windows(goblin: SummonerGoblin, download_path: pathlib.Path, version: str) -> None:
     """Extract and install on Windows."""
     extract_dir = pulsar_env.PULSAR_CACHE_DIR / f'wezterm-{version}'
     goblin.extract(download_path, extract_dir)
 
+    # Find the directory containing wezterm.exe
     exe_path = list(extract_dir.rglob('wezterm.exe'))[0]
-    shutil.copy(exe_path, pulsar_env.PULSAR_BIN_DIR / 'wezterm.exe')
+    source_dir = exe_path.parent
+
+    # Install to a wezterm subdirectory to keep all files together
+    install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+    if install_dir.exists():
+        shutil.rmtree(install_dir)
+    shutil.copytree(source_dir, install_dir)
 
 @wezterm_book.installer
-def install():
+def install() -> None:
     """Install Wezterm"""
     import summoning_circle
 
@@ -179,29 +196,24 @@ def install():
     _download_file(goblin, url, download_path)
 
     if pulsar_env.OS == 'linux':
-        _install_linux(download_path, version)
+        _install_linux(goblin, download_path, version)
     elif pulsar_env.OS == 'windows':
         _install_windows(goblin, download_path, version)
+
+    goblin.logger.info("Wezterm installed successfully")
 
     goblin.complete()
 
 @wezterm_book.uninstaller
-def uninstall():
+def uninstall() -> None:
     """Uninstall Wezterm"""
-
-    if pulsar_env.OS == 'linux':
-        # Remove the wezterm directory
-        install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
-        if install_dir.exists():
-            shutil.rmtree(install_dir)
-    elif pulsar_env.OS == 'windows':
-        # Remove the wezterm.exe file
-        exe_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm.exe'
-        if exe_path.exists():
-            exe_path.unlink()
+    # Remove the wezterm directory for both Linux and Windows
+    install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+    if install_dir.exists():
+        shutil.rmtree(install_dir)
 
 @wezterm_book.typer_app.callback(invoke_without_command=True)
-def launch(ctx: typer.Context):
+def launch(ctx: typer.Context) -> None:
     """Launch Wezterm terminal"""
     if ctx.invoked_subcommand is None:
         if not wezterm_book.installed_with_pulsar:
@@ -212,7 +224,7 @@ def launch(ctx: typer.Context):
         if pulsar_env.OS == 'linux':
             wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'usr' / 'bin' / 'wezterm'
         elif pulsar_env.OS == 'windows':
-            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm.exe'
+            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'wezterm.exe'
         else:
             wezterm_path = 'wezterm'
 
@@ -239,4 +251,3 @@ def launch(ctx: typer.Context):
         except Exception as e:
             typer.echo(f"Failed to launch wezterm: {e}")
             raise typer.Exit(code=1)
-
