@@ -174,6 +174,11 @@ UV_CACHE_DIR = _get_env_or_default(
     PULSAR_CACHE_DIR / 'uv'
 )
 
+VIRTUAL_ENV = _get_env_or_default(
+    'VIRTUAL_ENV',
+    PULSAR_ROOT / '.venv'
+)
+
 
 # ============================================================================
 # Activation State Management

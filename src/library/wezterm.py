@@ -18,8 +18,86 @@ from summoning_circle.summoner_goblin_class import SummonerGoblin
 
 wezterm_book = SpellBook('wezterm')
 
-# Check installation status on module import
-def _check_pulsar_installation() -> bool:
+@wezterm_book.install.define
+def install() -> None:
+    """Install Wezterm"""
+    import summoning_circle
+
+    goblin = summoning_circle.summon_goblin_worker(wezterm_book)
+
+    if goblin.reinstall_command:
+        uninstall()
+
+    locked_data = star_map.read('wezterm')
+    version = _get_version(goblin, locked_data)
+    url, filename = _get_download_url(goblin, version, locked_data)
+
+    goblin.logger.info('Installing version %s', version)
+
+    wezterm_book.cache_dir.mkdir(exist_ok=True, parents=True)
+    download_path = wezterm_book.cache_dir / filename
+
+    _download_file(goblin, url, download_path)
+
+    if pulsar_env.OS == 'linux':
+        _install_linux(goblin, download_path, version)
+    elif pulsar_env.OS == 'windows':
+        _install_windows(goblin, download_path, version)
+
+    goblin.logger.info("Wezterm installed successfully")
+
+    goblin.complete()
+
+@wezterm_book.uninstall.define
+def uninstall() -> None:
+    """Uninstall Wezterm"""
+    # Remove the wezterm directory for both Linux and Windows
+    install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+    if install_dir.exists():
+        shutil.rmtree(install_dir)
+
+@wezterm_book.typer_app.callback(invoke_without_command=True)
+def launch(ctx: typer.Context) -> None:
+    """Launch Wezterm terminal"""
+    if ctx.invoked_subcommand is None:
+        if not wezterm_book.installed_with_pulsar:
+            typer.echo("Wezterm is not installed. Run 'pulsar install wezterm' first.")
+            raise typer.Exit(code=1)
+
+        # Determine the wezterm executable path
+        if pulsar_env.OS == 'linux':
+            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'usr' / 'bin' / 'wezterm'
+        elif pulsar_env.OS == 'windows':
+            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'wezterm.exe'
+        else:
+            wezterm_path = 'wezterm'
+
+        # Launch wezterm detached from this shell session
+        try:
+            if pulsar_env.OS == 'windows':
+                # On Windows, use CREATE_NEW_PROCESS_GROUP and DETACHED_PROCESS
+                subprocess.Popen(
+                    [str(wezterm_path)],
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL
+                )
+            else:
+                # On Linux/Unix, use nohup or double fork
+                subprocess.Popen(
+                    [str(wezterm_path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+        except Exception as e:
+            typer.echo(f"Failed to launch wezterm: {e}")
+            raise typer.Exit(code=1)
+        
+@wezterm_book.installed_with_pulsar.define
+def check_pulsar_installation() -> bool:
     """Check if wezterm is installed in pulsar bin folder."""
     if pulsar_env.OS == 'linux':
         install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
@@ -30,15 +108,35 @@ def _check_pulsar_installation() -> bool:
         return exe_path.exists()
     return False
 
-def _check_system_installation() -> bool:
+@wezterm_book.installed.define
+def check_system_installation() -> bool:
     """Check if wezterm is installed system-wide."""
-    return shutil.which('wezterm') is not None
+    return shutil.which('wezterm') is not None \
+    or check_pulsar_installation()
 
-def _get_installed_version() -> str | None:
-    """Query wezterm for its version."""
+@wezterm_book.version.define
+def get_installed_version() -> str | None:
+    """Query wezterm for its version"""
+    # Try Pulsar-installed wezterm first
+    wezterm_path = None
+    if pulsar_env.OS == 'linux':
+        install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+        local_wezterm = install_dir / 'usr' / 'bin' / 'wezterm'
+        if local_wezterm.exists():
+            wezterm_path = str(local_wezterm)
+    elif pulsar_env.OS == 'windows':
+        install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
+        local_wezterm = install_dir / 'wezterm.exe'
+        if local_wezterm.exists():
+            wezterm_path = str(local_wezterm)
+
+    # Fall back to system wezterm if Pulsar version not found
+    if wezterm_path is None:
+        wezterm_path = 'wezterm'
+
     try:
         result = subprocess.run(
-            ['wezterm', '--version'],
+            [wezterm_path, '--version'],
             capture_output=True,
             text=True,
             timeout=5
@@ -52,12 +150,7 @@ def _get_installed_version() -> str | None:
         return None
     except Exception:
         return None
-
-# Set installation status
-wezterm_book.installed_with_pulsar = _check_pulsar_installation()
-wezterm_book.installed = wezterm_book.installed_with_pulsar or _check_system_installation()
-wezterm_book.version = _get_installed_version() if wezterm_book.installed else None
-
+        
 def _get_version(goblin: SummonerGoblin, locked_data: dict | None) -> str:
     """Get the version to install from star_map or GitHub API."""
     if locked_data and 'version' in locked_data:
@@ -173,81 +266,3 @@ def _install_windows(goblin: SummonerGoblin, download_path: pathlib.Path, versio
     if install_dir.exists():
         shutil.rmtree(install_dir)
     shutil.copytree(source_dir, install_dir)
-
-@wezterm_book.installer
-def install() -> None:
-    """Install Wezterm"""
-    import summoning_circle
-
-    goblin = summoning_circle.summon_goblin_worker(wezterm_book)
-
-    if goblin.reinstall_command:
-        uninstall()
-
-    locked_data = star_map.read('wezterm')
-    version = _get_version(goblin, locked_data)
-    url, filename = _get_download_url(goblin, version, locked_data)
-
-    goblin.logger.info('Installing version %s', version)
-
-    wezterm_book.cache_dir.mkdir(exist_ok=True, parents=True)
-    download_path = wezterm_book.cache_dir / filename
-
-    _download_file(goblin, url, download_path)
-
-    if pulsar_env.OS == 'linux':
-        _install_linux(goblin, download_path, version)
-    elif pulsar_env.OS == 'windows':
-        _install_windows(goblin, download_path, version)
-
-    goblin.logger.info("Wezterm installed successfully")
-
-    goblin.complete()
-
-@wezterm_book.uninstaller
-def uninstall() -> None:
-    """Uninstall Wezterm"""
-    # Remove the wezterm directory for both Linux and Windows
-    install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
-    if install_dir.exists():
-        shutil.rmtree(install_dir)
-
-@wezterm_book.typer_app.callback(invoke_without_command=True)
-def launch(ctx: typer.Context) -> None:
-    """Launch Wezterm terminal"""
-    if ctx.invoked_subcommand is None:
-        if not wezterm_book.installed_with_pulsar:
-            typer.echo("Wezterm is not installed. Run 'pulsar install wezterm' first.")
-            raise typer.Exit(code=1)
-
-        # Determine the wezterm executable path
-        if pulsar_env.OS == 'linux':
-            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'usr' / 'bin' / 'wezterm'
-        elif pulsar_env.OS == 'windows':
-            wezterm_path = pulsar_env.PULSAR_BIN_DIR / 'wezterm' / 'wezterm.exe'
-        else:
-            wezterm_path = 'wezterm'
-
-        # Launch wezterm detached from this shell session
-        try:
-            if pulsar_env.OS == 'windows':
-                # On Windows, use CREATE_NEW_PROCESS_GROUP and DETACHED_PROCESS
-                subprocess.Popen(
-                    [str(wezterm_path)],
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL
-                )
-            else:
-                # On Linux/Unix, use nohup or double fork
-                subprocess.Popen(
-                    [str(wezterm_path)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    start_new_session=True
-                )
-        except Exception as e:
-            typer.echo(f"Failed to launch wezterm: {e}")
-            raise typer.Exit(code=1)

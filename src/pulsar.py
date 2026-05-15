@@ -4,6 +4,8 @@ Pulsar - A Python Package Manager CLI
 import os
 import sys
 import typing
+import shutil
+import pathlib
 
 import typer
 
@@ -30,10 +32,10 @@ r'''
 '''
 
 app = typer.Typer(
-    name="pulsar",
+    name='pulsar',
     help="Pulsar - Python Package Manager",
     add_completion=True,
-    rich_markup_mode="rich",
+    rich_markup_mode='rich',
 )
 
 library.import_all()
@@ -44,10 +46,10 @@ for spell_book in library.catalog.values():
 
 def show_banner():
     """Display a random Pulsar banner."""
-    pulsar_console.console.print(ASCII_ART, style="bold blue", markup=False, highlight=False)
+    pulsar_console.console.print(ASCII_ART, style='bold blue', markup=False, highlight=False)
     pulsar_console.console.print(
         "By Andrew Ashby\n",
-        style="dim blue"
+        style='dim blue'
     )
 
 
@@ -97,8 +99,8 @@ def install(
 @app.command()
 def uninstall(
     spell_books: typing.Optional[typing.List[str]] = typer.Argument(None, help="Spell book(s) to uninstall"),
-    all: bool = typer.Option(False, "--all", "-a", help="Uninstall all installed spell book"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+    all: bool = typer.Option(False, '--all', '-a', help="Uninstall all installed spell book"),
+    yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
     Uninstall one or more spell books.
@@ -134,58 +136,81 @@ def uninstall(
             return
 
     for sb in uninstall_list:
-        if sb._uninstaller_spell is not None:
-            sb._uninstaller_spell()
-            
+        sb.uninstall()
 
 
-# @app.command()
-# def update(
-#     packages: Optional[List[str]] = typer.Argument(None, help="Specific package(s) to update"),
-#     all: bool = typer.Option(False, "--all", "-a", help="Update all packages"),
+# @app.command('list')
+# def list_command(
+#     versions: bool = typer.Option(False, '--versions', '-v', help="Show installed versions"),
+#     include_uninstalled: bool = typer.Option(False, '--all', '-a', help="Show all spell books and if they are installed."),
 # ):
 #     """
-#     Update packages to their latest versions.
+#     List available spell books and their installation status.
 
 #     Example:
-#         pulsar update requests
-#         pulsar update --all
+#         pulsar list                    # List installed spell books
+#         pulsar list --versions         # List with version numbers
+#         pulsar list --all              # List all spell books
 #     """
-#     if all:
-#         pulsar_console.console.print("\n[bold cyan]Updating all packages...[/bold cyan]")
-#     elif packages:
-#         pulsar_console.console.print(f"\n[bold cyan]Updating packages:[/bold cyan] {', '.join(packages)}")
+#     # Get spell books based on filter
+#     if include_uninstalled:
+#         spell_books = list(library.catalog.values())
 #     else:
-#         pulsar_console.console.print("[red]Error: Specify packages or use --all flag[/red]\n")
-#         raise typer.Exit(code=1)
+#         spell_books = [sb for sb in library.catalog.values() if sb.installed]
 
-#     # TODO: Implement package update logic
-#     pulsar_console.console.print("[yellow]⚠ Update logic not yet implemented[/yellow]\n")
+#     if not spell_books:
+#         pulsar_console.console.print("[dim]No spell books found[/dim]\n")
+#         return
 
+#     # Sort by name
+#     spell_books.sort(key=lambda sb: sb.name)
 
-@app.command('list')
-def list_command(
-    format: str = typer.Option("simple", "--format", "-f", help="Output format: table, json, simple"),
-    installed_only: bool = typer.Option(False, "--installed", "-i", help="Show only installed packages"),
-):
-    """
-    List available and installed packages.
+#     # Calculate column widths
+#     max_name_len = max(len(sb.name) for sb in spell_books)
+#     name_width = max(max_name_len, len("Spell Book"))
 
-    Example:
-        pulsar list
-        pulsar list --installed
-        pulsar list --format json
-        pulsar list --format simple
-    """
-    pass
+#     if versions or include_uninstalled:
+#         # Header
+#         if include_uninstalled:
+#             pulsar_console.console.print(f"{'Spell Book':<{name_width}} {'Status':<12} Version")
+#             pulsar_console.console.print(f"{'-' * name_width} {'-' * 12} {'-' * 10}")
+#         else:
+#             pulsar_console.console.print(f"{'Spell Book':<{name_width}} Version")
+#             pulsar_console.console.print(f"{'-' * name_width} {'-' * 10}")
 
+#         # Rows
+#         for sb in spell_books:
+#             version_str = sb.version if sb.version else "-"
+
+#             if include_uninstalled:
+#                 status_width = 12
+#                 if sb.installed_with_pulsar:
+#                     status_text = "installed"
+#                     status = f"[green]{status_text:<{status_width}}[/green]"
+#                 elif sb.installed:
+#                     status_text = "system"
+#                     status = f"[yellow]{status_text:<{status_width}}[/yellow]"
+#                 else:
+#                     status_text = "not installed"
+#                     status = f"[dim]{status_text:<{status_width}}[/dim]"
+#                     version_str = ""
+
+#                 pulsar_console.console.print(f"{sb.name:<{name_width}} {status} {version_str}")
+#             else:
+#                 pulsar_console.console.print(f"{sb.name:<{name_width}} {version_str}")
+        
+#         pulsar_console.console.print()
+
+#     else:
+#         for sb in spell_books:
+#             pulsar_console.console.print(f"{sb.name}")
 
 
 @app.command()
 def clean(
-    cache: bool = typer.Option(False, "--cache", help="Clean cache directory"),
-    data: bool = typer.Option(False, "--data", help="Clean data and state directories"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+    cache: bool = typer.Option(False, '--cache', help="Clean cache directory"),
+    data: bool = typer.Option(False, '--data', help="Clean data and state directories"),
+    yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
     Clean cache and/or data/state directories.
@@ -196,12 +221,59 @@ def clean(
         pulsar clean --cache --data     # Clean cache and data
         pulsar clean --cache --yes      # Skip confirmation
     """
-    pass
+
+    # If neither flag is set, show error
+    if not cache and not data:
+        pulsar_console.console.print("[red]Error: Specify --cache and/or --data flag[/red]\n")
+        raise typer.Exit(code=1)
+
+    # Build list of directories to clean
+    dirs_to_remove = []
+
+    if cache:
+        cache_dir = pathlib.Path(pulsar_env.PULSAR_CACHE_DIR)
+        if cache_dir.exists():
+            dirs_to_remove.append(cache_dir)
+
+    if data:
+        data_dir = pathlib.Path(pulsar_env.PULSAR_DATA_DIR)
+        state_dir = pathlib.Path(pulsar_env.PULSAR_STATE_DIR)
+        if data_dir.exists():
+            dirs_to_remove.append(data_dir)
+        if state_dir.exists():
+            dirs_to_remove.append(state_dir)
+
+    # If no directories exist, nothing to clean
+    if not dirs_to_remove:
+        pulsar_console.console.print("[dim]No directories to clean (they don't exist)[/dim]\n")
+        return
+
+    # Show what will be deleted
+    pulsar_console.console.print(f"\n[bold yellow]⚠ WARNING:[/bold yellow] This will delete the following directories:")
+    for d in dirs_to_remove:
+        pulsar_console.console.print(f"  • {d}")
+    pulsar_console.console.print()
+
+    # Confirm unless --yes is provided
+    if not yes:
+        confirm = typer.confirm("Are you sure you want to continue?")
+        if not confirm:
+            pulsar_console.console.print("[dim]Clean cancelled[/dim]\n")
+            raise typer.Exit(code=0)
+
+    pulsar_console.console.print("[bold cyan]Cleaning directories...[/bold cyan]")
+
+    # Remove directories
+    for d in dirs_to_remove:
+        pulsar_console.console.print(f"  Removing {d.name}...")
+        shutil.rmtree(d)
+
+    pulsar_console.console.print("[bold green]✓ Clean complete![/bold green]\n")
 
 
 @app.command()
 def reset(
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+    yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
     Reset Pulsar environment by deleting bin and .venv directories.
@@ -213,13 +285,9 @@ def reset(
         pulsar reset
         pulsar reset --yes
     """
-    import shutil
-    from pathlib import Path
-
-    pulsar_root = Path(pulsar_env.PULSAR_ROOT)
     dirs_to_remove = [
-        pulsar_root / 'bin',
-        pulsar_root / '.venv',
+        pulsar_env.PULSAR_BIN_DIR,
+        pulsar_env.VIRTUAL_ENV,
     ]
 
     pulsar_console.console.print(f"\n[bold yellow]⚠ WARNING:[/bold yellow] This will delete the following directories:")
@@ -246,7 +314,7 @@ def reset(
 
 @app.command()
 def nuke(
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+    yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
     Completely nuke the Pulsar environment.
@@ -258,16 +326,13 @@ def nuke(
         pulsar nuke
         pulsar nuke --yes
     """
-    import shutil
-    from pathlib import Path
 
-    pulsar_root = Path(pulsar_env.PULSAR_ROOT)
     dirs_to_remove = [
-        pulsar_root / '.cache',
-        pulsar_root / '.data',
-        pulsar_root / '.state',
-        pulsar_root / 'bin',
-        pulsar_root / '.venv',
+        pulsar_env.PULSAR_CACHE_DIR,
+        pulsar_env.PULSAR_DATA_DIR,
+        pulsar_env.PULSAR_STATE_DIR,
+        pulsar_env.PULSAR_BIN_DIR,
+        pulsar_env.VIRTUAL_ENV,
     ]
 
     pulsar_console.console.print(f"\n[bold red]⚠ WARNING:[/bold red] This will delete the following directories:")
@@ -292,7 +357,7 @@ def nuke(
 
     # Remove all __pycache__ directories
     pulsar_console.console.print("  Removing __pycache__ directories...")
-    for pycache_dir in pulsar_root.rglob('__pycache__'):
+    for pycache_dir in pulsar_env.PULSAR_ROOT.rglob('__pycache__'):
         try:
             shutil.rmtree(pycache_dir)
         except Exception:
@@ -300,79 +365,6 @@ def nuke(
 
     pulsar_console.console.print("[bold green]✓ Nuke complete![/bold green]")
     pulsar_console.console.print("[dim]Run 'source activate' to reinitialize the environment.[/dim]\n")
-
-# @app.command()
-# def launch():
-#     """
-#     Launch WezTerm in a detached window.
-
-#     Example:
-#         pulsar launch
-#     """
-#     from pathlib import Path
-
-#     package_list = get_all_packages()
-
-#     # Check if wezterm package exists
-#     if 'wezterm' not in package_list:
-#         pulsar_console.console.print("\n[red]✗ Error: WezTerm package not found in package list[/red]\n")
-#         raise typer.Exit(code=1)
-
-#     wezterm_pkg = package_list['wezterm']
-
-#     # Check if wezterm is installed with pulsar
-#     if not wezterm_pkg.is_installed_with_pulsar():
-#         pulsar_console.console.print("\n[yellow]⚠ WezTerm is not installed with Pulsar.[/yellow]")
-#         install_prompt = typer.confirm("Would you like to install WezTerm now?")
-
-#         if not install_prompt:
-#             pulsar_console.console.print("[dim]Exiting...[/dim]\n")
-#             raise typer.Exit(code=0)
-
-#         # Install wezterm
-#         pulsar_console.console.print("\n[bold cyan]Installing WezTerm...[/bold cyan]\n")
-#         try:
-#             installer = PackageInstaller(max_workers=1)
-#             installer.install_packages(['wezterm'], reinstall=False, refresh_cache=False)
-#         except Exception as e:
-#             pulsar_console.console.print(f"\n[red]✗ Installation failed: {e}[/red]\n")
-#             raise typer.Exit(code=1)
-
-#     # Launch wezterm from bin directory
-#     wezterm_bin = Path(pulsar_env.PULSAR_BIN_DIR) / 'wezterm' / ('wezterm.exe' if pulsar_env.OS == 'windows' else 'wezterm')
-
-#     if not wezterm_bin.exists():
-#         pulsar_console.console.print(f"\n[red]✗ WezTerm executable not found at: {wezterm_bin}[/red]\n")
-#         raise typer.Exit(code=1)
-
-#     try:
-#         if pulsar_env.OS == 'windows':
-#             # Windows: Use CREATE_NEW_PROCESS_GROUP and DETACHED_PROCESS flags
-#             DETACHED_PROCESS = 0x00000008
-#             CREATE_NEW_PROCESS_GROUP = 0x00000200
-
-#             subprocess.Popen(
-#                 [str(wezterm_bin)],
-#                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-#                 stdin=subprocess.DEVNULL,
-#                 stdout=subprocess.DEVNULL,
-#                 stderr=subprocess.DEVNULL,
-#                 close_fds=True
-#             )
-#         else:
-#             # Linux/Unix: Use nohup-style detachment
-#             subprocess.Popen(
-#                 [str(wezterm_bin)],
-#                 stdin=subprocess.DEVNULL,
-#                 stdout=subprocess.DEVNULL,
-#                 stderr=subprocess.DEVNULL,
-#                 start_new_session=True,
-#                 close_fds=True
-#             )
-
-#     except Exception as e:
-#         pulsar_console.console.print(f"\n[red]✗ Failed to launch WezTerm: {e}[/red]\n")
-#         raise typer.Exit(code=1)
 
 
 @app.command()
@@ -393,7 +385,7 @@ def version():
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    display_banner: bool = typer.Option(True, "--banner/--no-banner", help="Show ASCII banner"),
+    display_banner: bool = typer.Option(True, '--banner/--no-banner', help="Show ASCII banner"),
 ):
     """
     Pulsar - Python Package Manager
@@ -407,5 +399,5 @@ def main(
         pulsar_console.console.print("Run [cyan]pulsar --help[/cyan] for more information.\n")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app()

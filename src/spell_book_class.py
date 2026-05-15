@@ -10,6 +10,65 @@ import pulsar_console
 import pulsar_env
 
 _DECORATOR_INPUT = typing.TypeVar("_DECORATOR_INPUT", bound=typing.Callable)
+_TyperCommandDec = typing.Callable[[_DECORATOR_INPUT], _DECORATOR_INPUT]
+_P = typing.ParamSpec("_P")
+_R = typing.TypeVar("_R")
+
+class Spell(typing.Generic[_P, _R]):
+
+    func: typing.Callable[_P, _R] | None
+    typer_command: _TyperCommandDec | None
+    require_no_args: bool
+
+    @staticmethod
+    def _no_required_args(func: typing.Callable) -> bool:
+        """Check if a callable has any required arguments (parameters without defaults)."""
+        sig = inspect.signature(func)
+        for param in sig.parameters.values():
+            # Check if parameter has no default value and is not *args or **kwargs
+            if (param.default is inspect.Parameter.empty and
+                param.kind not in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD
+                )):
+
+                return False
+        return True
+
+    def __init__(
+        self,
+        typer_command: _TyperCommandDec = None,
+        require_no_args: bool = True,
+    ):
+        self.func = None
+        self.typer_command = typer_command
+        self.require_no_args = require_no_args
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+
+        if self.func is None:
+            return None
+        
+        result = self.func(*args, **kwargs)
+        
+        if result is not None:
+            pulsar_console.console.print(result)
+
+        return result
+    
+    @property
+    def define(self) -> _TyperCommandDec: 
+
+        def decorator(func):
+            self.func = func
+            if self.typer_command is not None:
+                self.typer_command(func)
+            return func
+        
+        return decorator
+    
+    def is_defined(self) -> bool:
+        return self.func is not None
 
 class SpellBook:
 
@@ -22,18 +81,17 @@ class SpellBook:
 
     dependencies: list[typing.Union['SpellBook', str]]
 
-    _installer_spell: typing.Callable
-    _uninstaller_spell: typing.Callable
-    _on_activate_spell: typing.Callable
+    install: Spell
+    uninstall: Spell
+    on_activate: Spell
+
+    installed: Spell
+    installed_with_pulsar: Spell
+    version: Spell[[], str]
 
     typer_app: typer.Typer
 
     cache_dir: pathlib.Path
-
-    # Install info
-    installed: bool | None
-    installed_with_pulsar: bool | None
-    version: str | None
 
     def __init__(
         self, 
@@ -53,19 +111,19 @@ class SpellBook:
         self.dependencies = dependencies if dependencies is not None else []
 
         self.typer_app = typer.Typer(
-            name=self.name, 
+            name=self.name,
             help=help,
         )
 
-        self._installer_spell = None
-        self._uninstaller_spell = None
-        self._on_activate_spell = None
+        self.install = Spell(self.typer_app.command('install'))
+        self.uninstall = Spell(self.typer_app.command('uninstall'))
+        self.on_activate = Spell()
+
+        self.installed = Spell()
+        self.installed_with_pulsar = Spell()
+        self.version = Spell(self.typer_app.command('version'))
 
         self.cache_dir = pulsar_env.PULSAR_CACHE_DIR / self.name
-
-        self.installed = None
-        self.installed_with_pulsar = None
-        self.version = None
 
         import library
 
@@ -73,23 +131,6 @@ class SpellBook:
 
     def __repr__(self):
         return f"<SpellBooK: {self.name}>"
-
-    def installer(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
-        assert not _has_required_args(func)
-        self._installer_spell = func
-        self.typer_app.command('install')(func)
-        return func
-    
-    def uninstaller(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
-        assert not _has_required_args(func)
-        self._uninstaller_spell = func
-        self.typer_app.command('uninstall')(func)
-        return func
-    
-    def on_activate(self, func: _DECORATOR_INPUT) -> _DECORATOR_INPUT:
-        assert not _has_required_args(func)
-        self._on_activate_spell = func
-        return func
 
 class BrokenSpellBook(SpellBook):
     
@@ -102,17 +143,3 @@ class BrokenSpellBook(SpellBook):
         pulsar_console.err_console.print(self.traceback)
 
 SpellBook.BROKEN = BrokenSpellBook
-
-def _has_required_args(func: typing.Callable) -> bool:
-    """Check if a callable has any required arguments (parameters without defaults)."""
-    sig = inspect.signature(func)
-    for param in sig.parameters.values():
-        # Check if parameter has no default value and is not *args or **kwargs
-        if (param.default is inspect.Parameter.empty and
-            param.kind not in (
-                inspect.Parameter.VAR_POSITIONAL, 
-                inspect.Parameter.VAR_KEYWORD
-            )):
-
-            return True
-    return False

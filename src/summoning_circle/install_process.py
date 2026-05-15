@@ -97,11 +97,11 @@ def install_spell_books(
                 sb, reinstall, no_cache,
             ) 
             for sb in spell_books 
-            if sb._installer_spell is not None
+            if sb.install.is_defined()
         ]
 
         future_to_goblin = {
-            executor.submit(goblin.spell_book._installer_spell) : goblin
+            executor.submit(goblin.spell_book.install) : goblin
             for goblin in goblin_team
         }
         
