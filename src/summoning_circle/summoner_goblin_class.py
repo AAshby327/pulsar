@@ -1,5 +1,6 @@
 import logging
 import threading
+import pathlib
 
 import rich.progress
 
@@ -98,6 +99,69 @@ class SummonerGoblin:
                     self._waiting_for.remove(sb)
 
             dep_finished.clear()
+
+    def download(self, url: str, output_path: pathlib.Path):
+        import urllib.request
+
+        saved_status = self.status
+        saved_bar_style = self.bar_style
+
+        self.status = 0.0
+        self.bar_style = 'blue'
+
+        def report_progress(block_num: int, block_size: int, total_size: int):
+            if total_size > 0:
+                downloaded = block_num * block_size
+                self.status = min(downloaded / total_size, 1.0)
+
+        urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
+        
+        self.status = saved_status
+        self.bar_style = saved_bar_style
+
+    def extract(self, file_path: pathlib.Path, output_dir: pathlib.Path):
+        import zipfile
+        import tarfile
+        import py7zr
+
+        saved_status = self.status
+        saved_bar_style = self.bar_style
+
+        self.status = 0.0
+        self.bar_style = 'yellow'
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        suffix = file_path.suffix.lower()
+
+        if suffix == '.zip':
+            with zipfile.ZipFile(file_path, 'r') as archive:
+                members = archive.namelist()
+                total = len(members)
+                for i, member in enumerate(members):
+                    archive.extract(member, output_dir)
+                    self.status = (i + 1) / total
+
+        elif suffix in ('.tar', '.gz', '.bz2', '.xz') or '.tar.' in file_path.name:
+            with tarfile.open(file_path, 'r:*') as archive:
+                members = archive.getmembers()
+                total = len(members)
+                for i, member in enumerate(members):
+                    archive.extract(member, output_dir)
+                    self.status = (i + 1) / total
+
+        elif suffix == '.7z':
+            with py7zr.SevenZipFile(file_path, 'r') as archive:
+                members = archive.getnames()
+                total = len(members)
+                archive.extractall(path=output_dir)
+                self.status = 1.0
+
+        else:
+            raise ValueError(f"Unsupported archive format: {suffix}")
+
+        self.status = saved_status
+        self.bar_style = saved_bar_style
     
     def complete(self):
         self._completion_horn.set()

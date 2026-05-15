@@ -42,6 +42,16 @@ class ProgressBarColumn(rich.progress.ProgressColumn):
             bar.pulse = True
             return bar
         
+        if goblin._completion_horn.is_set():
+            bar.pulse = False
+            if goblin.error is None:
+                bar.completed = 1.0
+                bar.finished_style = 'bar.finished'
+            else: 
+                bar.finished_style = 'red'
+                bar.style = 'dim red'
+            return bar
+        
         if len(goblin._waiting_for) > 0:
             names = ", ".join(sb.name for sb in goblin._waiting_for)
             text = f"[waiting: {names}]"
@@ -58,7 +68,6 @@ class ProgressBarColumn(rich.progress.ProgressColumn):
             bar.completed = goblin.status
         
         bar.complete_style = goblin.bar_style
-        bar.finished_style = goblin.bar_style
         bar.pulse_style = goblin.bar_style
 
         return bar

@@ -1,15 +1,19 @@
 import typing
 import logging
 import inspect
+import pathlib
 
 import typer
 import rich.traceback
 
 import pulsar_console
+import pulsar_env
 
 _DECORATOR_INPUT = typing.TypeVar("_DECORATOR_INPUT", bound=typing.Callable)
 
 class SpellBook:
+
+    BROKEN: type['BrokenSpellBook'] = None
 
     name: str
     script: str
@@ -23,6 +27,13 @@ class SpellBook:
     _on_activate_spell: typing.Callable
 
     typer_app: typer.Typer
+
+    cache_dir: pathlib.Path
+
+    # Install info
+    installed: bool | None
+    installed_with_pulsar: bool | None
+    version: str | None
 
     def __init__(
         self, 
@@ -49,6 +60,12 @@ class SpellBook:
         self._installer_spell = None
         self._uninstaller_spell = None
         self._on_activate_spell = None
+
+        self.cache_dir = pulsar_env.PULSAR_CACHE_DIR / self.name
+
+        self.installed = None
+        self.installed_with_pulsar = None
+        self.version = None
 
         import library
 
@@ -83,6 +100,8 @@ class BrokenSpellBook(SpellBook):
 
     def print_error(self):
         pulsar_console.err_console.print(self.traceback)
+
+SpellBook.BROKEN = BrokenSpellBook
 
 def _has_required_args(func: typing.Callable) -> bool:
     """Check if a callable has any required arguments (parameters without defaults)."""

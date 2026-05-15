@@ -51,7 +51,7 @@ def show_banner():
     )
 
 
-@app.command()
+@app.command(hidden=True)
 def activate():
     """
     Activate the Pulsar environment.
@@ -61,38 +61,82 @@ def activate():
 
 @app.command()
 def install(
-    packages: typing.Optional[typing.List[str]] = typer.Argument(None, help="Package(s) to install"),
-    all: bool = typer.Option(False, '--all', '-a', help="Install all available packages"),
-    reinstall: bool = typer.Option(False, '--reinstall', '-r', help="Reinstall package"),
-    refresh_cache: bool = typer.Option(False, '--refresh-cache', help="Redownload package"),
+    spell_books: typing.Optional[typing.List[str]] = typer.Argument(None, help="Spell Book(s) to install"),
+    all: bool = typer.Option(False, '--all', '-a', help="Install all available spell books"),
+    reinstall: bool = typer.Option(False, '--reinstall', '-r', help="Reinstall spell books"),
+    refresh_cache: bool = typer.Option(False, '--refresh-cache', help="Redownload spell books"),
     workers: int = typer.Option(4, '--workers', '-w', help="Number of parallel workers")
 ):
     """
-    Install one or more packages.
+    Install one or more spell book.
 
     Example:
         pulsar install wezterm
         pulsar install lazygit fzf --reinstall
         pulsar install --all
     """
-    pass
+
+    import summoning_circle
+    
+    install_list = []
+
+    if all:
+        install_list = list(library.catalog.values())
+    else:
+        for name in spell_books:
+            if name not in library.catalog:
+                raise KeyError(f"Unable to find the spell book: '{name}'")
+            
+            install_list.append(library.catalog[name])
+
+    summoning_circle.install_spell_books(
+        install_list, reinstall, refresh_cache, workers
+    )
 
 
 @app.command()
 def uninstall(
-    packages: typing.Optional[typing.List[str]] = typer.Argument(None, help="Package(s) to uninstall"),
-    all: bool = typer.Option(False, "--all", "-a", help="Uninstall all installed packages"),
+    spell_books: typing.Optional[typing.List[str]] = typer.Argument(None, help="Spell book(s) to uninstall"),
+    all: bool = typer.Option(False, "--all", "-a", help="Uninstall all installed spell book"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ):
     """
-    Uninstall one or more packages.
+    Uninstall one or more spell books.
 
     Example:
         pulsar uninstall wezterm
         pulsar uninstall nodejs python --yes
         pulsar uninstall --all --yes
     """
-    pass
+    
+    if all:
+        uninstall_list = list(library.catalog.values())
+    else:
+        uninstall_list = []
+        for name in spell_books:
+            if name not in library.catalog:
+                raise KeyError(f"Unable to find spell book: '{name}'")
+            uninstall_list.append(library.catalog[name])
+
+    if not uninstall_list:
+        typer.echo("No spell books to uninstall.")
+        return
+
+    # Show confirmation unless --yes is provided
+    if not yes:
+        typer.echo("The following spell books will be uninstalled:")
+        for sb in uninstall_list:
+            typer.echo(f"  - {sb.name}")
+
+        confirm = typer.confirm("Do you want to continue?")
+        if not confirm:
+            typer.echo("Uninstall cancelled.")
+            return
+
+    for sb in uninstall_list:
+        if sb._uninstaller_spell is not None:
+            sb._uninstaller_spell()
+            
 
 
 # @app.command()
@@ -119,8 +163,8 @@ def uninstall(
 #     pulsar_console.console.print("[yellow]⚠ Update logic not yet implemented[/yellow]\n")
 
 
-@app.command()
-def list(
+@app.command('list')
+def list_command(
     format: str = typer.Option("simple", "--format", "-f", help="Output format: table, json, simple"),
     installed_only: bool = typer.Option(False, "--installed", "-i", help="Show only installed packages"),
 ):
