@@ -50,9 +50,31 @@ config.set_environment_variables = {
 
 -- Configure shell to source the appropriate Pulsar activation script
 if is_windows then
-  -- Windows: use system PowerShell and source activate.ps1
+
+  local function command_exists(cmd)
+    local ok, stdout = wezterm.run_child_process({ 'where', cmd })
+    return ok and stdout and stdout ~= ''
+  end
+
+  local shell = nil
   local activate_path = pulsar_root .. dir_sep .. 'activate.ps1'
-  config.default_prog = { 'pwsh.exe', '-NoLogo', '-NoExit', '-Command', '. "' .. activate_path .. '"' }
+
+  if command_exists('pwsh.exe') then
+    shell = 'pwsh.exe'
+  elseif command_exists('powershell.exe') then
+    shell = 'powershell.exe'
+  end
+
+  if shell ~= nil then 
+    config.default_prog = {
+      shell, '-NoLogo', '-NoExit', '-Command', '. "' .. activate_path .. '"'
+    }
+  else
+    config.default_prog = {
+      'cmd.exe', '/k',
+      'echo ERROR: No Powershell found.'
+    }
+  end
 else
   -- Linux: use bash with rcfile
   local activate_path = pulsar_root .. dir_sep .. 'activate'
