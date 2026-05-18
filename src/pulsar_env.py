@@ -19,7 +19,7 @@ import pathlib
 ARCH: typing.Literal['x86_64', 'aarch64']
 OS: typing.Literal['linux', 'windows']
 LINUX_DISTRO: str | None
-SHELL: str | None
+SHELL: typing.Literal['bash', 'powershell']
 
 # Detect architecture
 machine = platform.machine().lower()
@@ -47,26 +47,10 @@ else:
 
 # Detect shell environment
 """Detect the current shell across different operating systems."""
+if not 'SHELL' in os.environ:
+    raise EnvironmentError("SHELL environment variable not set.")
 
-# Unix/Linux: Check SHELL environment variable
-shell_path = os.environ.get('SHELL')
-if shell_path:
-    SHELL = pathlib.Path(shell_path).name
-
-# Windows: Check for PowerShell
-# PSModulePath is set by both PowerShell Core (pwsh) and Windows PowerShell
-elif 'PSModulePath' in os.environ and 'POWERSHELL_DISTRIBUTION_CHANNEL' in os.environ:
-        SHELL = 'powershell' 
-
-# Windows: Check for Command Prompt (cmd.exe)
-else:
-
-    comspec = os.environ.get('COMSPEC', '')
-    if 'cmd.exe' in comspec.lower():
-        SHELL = 'cmd'
-    else:
-        # If we still can't detect, return None
-        SHELL = None
+SHELL = os.environ['SHELL']
 
 
 # ============================================================================

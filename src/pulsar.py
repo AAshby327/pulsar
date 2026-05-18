@@ -17,6 +17,7 @@ sys.path.append(
 )
 
 import pulsar_env
+import shell_integration
 import pulsar_console
 import library
 
@@ -58,7 +59,8 @@ def activate():
     """
     Activate the Pulsar environment.
     """
-    pass
+    for sb in library.catalog.values():
+        sb.on_activate()
 
 
 @app.command()

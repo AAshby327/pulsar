@@ -26,9 +26,10 @@ export UV_TOOL_DIR="${PULSAR_DATA_DIR}/uv/tools"
 export UV_PYTHON_INSTALL_DIR="${PULSAR_DATA_DIR}/uv/python"
 export UV_CACHE_DIR="${PULSAR_CACHE_DIR}/uv"
 export UV_PROJECT_ENVIRONMENT="${PULSAR_ROOT}/.venv"
+export VIRTUAL_ENV=UV_PROJECT_ENVIRONMENT
 
-# Set VIRTUAL_ENV to the absolute path to avoid warnings
-export VIRTUAL_ENV="${PULSAR_ROOT}/.venv"
+# System config for pulsar
+export SHELL="bash"
 
 # Install uv if not already
 if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then

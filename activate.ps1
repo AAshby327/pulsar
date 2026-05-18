@@ -28,9 +28,10 @@ $env:UV_TOOL_DIR = "$env:PULSAR_DATA_DIR\uv\tools"
 $env:UV_PYTHON_INSTALL_DIR = "$env:PULSAR_DATA_DIR\uv\python"
 $env:UV_CACHE_DIR = "$env:PULSAR_CACHE_DIR\uv"
 $env:UV_PROJECT_ENVIRONMENT = "$env:PULSAR_ROOT\.venv"
+$env:VIRTUAL_ENV = $env:UV_PROJECT_ENVIRONMENT
 
-# Set VIRTUAL_ENV to the absolute path to avoid warnings
-$env:VIRTUAL_ENV = "$env:PULSAR_ROOT\.venv"
+# System config for pulsar
+$env:SHELL = "powershell"
 
 # Install uv if not already installed
 $uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
