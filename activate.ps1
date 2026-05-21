@@ -32,6 +32,7 @@ $env:VIRTUAL_ENV = $env:UV_PROJECT_ENVIRONMENT
 
 # System config for pulsar
 $env:SHELL = "powershell"
+$env:OUTPUT_DELIMITER = "###SHELL###"
 
 # Install uv if not already installed
 $uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"

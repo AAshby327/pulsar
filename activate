@@ -30,6 +30,7 @@ export VIRTUAL_ENV=UV_PROJECT_ENVIRONMENT
 
 # System config for pulsar
 export SHELL="bash"
+export OUTPUT_DELIMITER="###SHELL###"
 
 # Install uv if not already
 if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then

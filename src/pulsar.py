@@ -32,14 +32,14 @@ r'''
 ###         ########  ########## ########  ###     ### ###    ###
 '''
 
+library.import_all()
+
 app = typer.Typer(
     name='pulsar',
     help="Pulsar - Python Package Manager",
     add_completion=True,
     rich_markup_mode='rich',
 )
-
-library.import_all()
 
 for spell_book in library.catalog.values():
     app.add_typer(spell_book.typer_app, rich_help_panel='Spell Books')
@@ -384,7 +384,11 @@ def version():
         pulsar_console.console.print(f"Pulsar version: [bold cyan]{version_str}[/bold cyan]")
 
 
-@app.callback(invoke_without_command=True)
+def __flush_enchantments(*args, **kwargs):
+    shell_integration.enchant_shell()
+
+
+@app.callback(invoke_without_command=True, result_callback=__flush_enchantments)
 def main(
     ctx: typer.Context,
     display_banner: bool = typer.Option(True, '--banner/--no-banner', help="Show ASCII banner"),
@@ -401,5 +405,7 @@ def main(
         pulsar_console.console.print("Run [cyan]pulsar --help[/cyan] for more information.\n")
 
 
+
 if __name__ == '__main__':
     app()
+

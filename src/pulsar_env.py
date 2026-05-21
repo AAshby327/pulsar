@@ -168,6 +168,8 @@ VIRTUAL_ENV = _get_env_or_default(
 # Activation State Management
 # ============================================================================
 
+OUTPUT_DELIMITER = os.environ.get('OUTPUT_DELIMITER', '###SHELL###')
+
 env_vars: dict[str, str] = {}
 path_entries: list[str] = []
 source_files: list[str] = []
