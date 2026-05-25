@@ -15,8 +15,7 @@ def import_all():
 
         if module.name == '__init__.py' \
         or module.is_file() and module.suffix != '.py' \
-        or module.is_dir() and not (module / '__init__.py').exists() \
-        or module.name in sys.modules:
+        or module.is_dir() and not (module / '__init__.py').exists():
             continue
 
         try:

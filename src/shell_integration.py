@@ -1,11 +1,14 @@
-
 import pulsar_env
 
 def enchant_shell():
     
-    output = _get_bash_script() \
-    if pulsar_env.SHELL == 'bash' \
-    else _get_pwsh_script()
+    output = ''
+    if pulsar_env.SHELL == 'bash':
+        output = _get_bash_script()
+    elif pulsar_env.SHELL == 'powershell':
+        output = _get_pwsh_script()
+    else:
+        raise EnvironmentError(f"Unsupported shell type: {pulsar_env.SHELL}")
 
     if len(output) == 0:
         return
@@ -16,8 +19,18 @@ def enchant_shell():
 
 
 def _get_bash_script() -> str:
-    return ''
+    output = ''
+
+    for key, val in pulsar_env.env_vars.items():
+        output += f'export {key}="{val}"\n'
+
+    return output
 
 
 def _get_pwsh_script() -> str:
-    return ''
+    output = ''
+
+    for key, val in pulsar_env.env_vars.items():
+        output += f'$env:{key} = "{val}"\n'
+
+    return output

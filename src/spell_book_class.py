@@ -49,20 +49,24 @@ class Spell(typing.Generic[_P, _R]):
         if self.func is None:
             return None
         
-        result = self.func(*args, **kwargs)
-        
-        if result is not None:
-            pulsar_console.console.print(result)
-
-        return result
+        return self.func(*args, **kwargs)
     
-    @property
     def define(self) -> _TyperCommandDec: 
 
         def decorator(func):
             self.func = func
             if self.typer_command is not None:
-                self.typer_command(func)
+
+                def wrapper(*args, **kwargs):
+                    if self.func is None:
+                        return None
+                    result = self.func(*args, **kwargs)
+                    if result is not None:
+                        pulsar_console.console.print(result)
+                    return result
+
+                wrapper.__signature__ = inspect.signature(func)
+                self.typer_command(wrapper)
             return func
         
         return decorator

@@ -18,7 +18,7 @@ from summoning_circle.summoner_goblin_class import SummonerGoblin
 
 wezterm_book = SpellBook('wezterm')
 
-@wezterm_book.install.define
+@wezterm_book.install.define()
 def install() -> None:
     """Install Wezterm"""
     import summoning_circle
@@ -48,7 +48,7 @@ def install() -> None:
 
     goblin.complete()
 
-@wezterm_book.uninstall.define
+@wezterm_book.uninstall.define()
 def uninstall() -> None:
     """Uninstall Wezterm"""
     # Remove the wezterm directory for both Linux and Windows
@@ -96,7 +96,7 @@ def launch(ctx: typer.Context) -> None:
             typer.echo(f"Failed to launch wezterm: {e}")
             raise typer.Exit(code=1)
         
-@wezterm_book.installed_with_pulsar.define
+@wezterm_book.installed_with_pulsar.define()
 def check_pulsar_installation() -> bool:
     """Check if wezterm is installed in pulsar bin folder."""
     if pulsar_env.OS == 'linux':
@@ -108,13 +108,13 @@ def check_pulsar_installation() -> bool:
         return exe_path.exists()
     return False
 
-@wezterm_book.installed.define
+@wezterm_book.installed.define()
 def check_system_installation() -> bool:
     """Check if wezterm is installed system-wide."""
     return shutil.which('wezterm') is not None \
     or check_pulsar_installation()
 
-@wezterm_book.version.define
+@wezterm_book.version.define()
 def get_installed_version() -> str | None:
     """Query wezterm for its version"""
     # Try Pulsar-installed wezterm first

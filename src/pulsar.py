@@ -141,71 +141,73 @@ def uninstall(
         sb.uninstall()
 
 
-# @app.command('list')
-# def list_command(
-#     versions: bool = typer.Option(False, '--versions', '-v', help="Show installed versions"),
-#     include_uninstalled: bool = typer.Option(False, '--all', '-a', help="Show all spell books and if they are installed."),
-# ):
-#     """
-#     List available spell books and their installation status.
+@app.command('list')
+def list_command(
+    versions: bool = typer.Option(False, '--versions', '-v', help="Show installed versions"),
+    include_uninstalled: bool = typer.Option(False, '--all', '-a', help="Show all spell books and if they are installed."),
+):
+    """
+    List available spell books and their installation status.
 
-#     Example:
-#         pulsar list                    # List installed spell books
-#         pulsar list --versions         # List with version numbers
-#         pulsar list --all              # List all spell books
-#     """
-#     # Get spell books based on filter
-#     if include_uninstalled:
-#         spell_books = list(library.catalog.values())
-#     else:
-#         spell_books = [sb for sb in library.catalog.values() if sb.installed]
+    Example:
+        pulsar list                    # List installed spell books
+        pulsar list --versions         # List with version numbers
+        pulsar list --all              # List all spell books
+    """
+    # Get spell books based on filter
+    if include_uninstalled:
+        spell_books = list(library.catalog.values())
+    else:
+        spell_books = [sb for sb in library.catalog.values() if sb.installed()]
 
-#     if not spell_books:
-#         pulsar_console.console.print("[dim]No spell books found[/dim]\n")
-#         return
+    if not spell_books:
+        pulsar_console.console.print("[dim]No spell books found[/dim]\n")
+        return
 
-#     # Sort by name
-#     spell_books.sort(key=lambda sb: sb.name)
+    # Sort by name
+    spell_books.sort(key=lambda sb: sb.name)
 
-#     # Calculate column widths
-#     max_name_len = max(len(sb.name) for sb in spell_books)
-#     name_width = max(max_name_len, len("Spell Book"))
+    # Calculate column widths
+    max_name_len = max(len(sb.name) for sb in spell_books)
+    name_width = max(max_name_len, len("Spell Book"))
 
-#     if versions or include_uninstalled:
-#         # Header
-#         if include_uninstalled:
-#             pulsar_console.console.print(f"{'Spell Book':<{name_width}} {'Status':<12} Version")
-#             pulsar_console.console.print(f"{'-' * name_width} {'-' * 12} {'-' * 10}")
-#         else:
-#             pulsar_console.console.print(f"{'Spell Book':<{name_width}} Version")
-#             pulsar_console.console.print(f"{'-' * name_width} {'-' * 10}")
+    if versions or include_uninstalled:
+        # Header
+        if include_uninstalled:
+            pulsar_console.console.print(f"{'Spell Book':<{name_width}} {'Status':<12} Version")
+            pulsar_console.console.print(f"{'-' * name_width} {'-' * 12} {'-' * 10}")
+        else:
+            pulsar_console.console.print(f"{'Spell Book':<{name_width}} Version")
+            pulsar_console.console.print(f"{'-' * name_width} {'-' * 10}")
 
-#         # Rows
-#         for sb in spell_books:
-#             version_str = sb.version if sb.version else "-"
+        # Rows
+        for sb in spell_books:
+            # version_str = sb.version if sb.version else "-"
+            version_str = sb.version()
+            if not version_str: version_str = '-'
 
-#             if include_uninstalled:
-#                 status_width = 12
-#                 if sb.installed_with_pulsar:
-#                     status_text = "installed"
-#                     status = f"[green]{status_text:<{status_width}}[/green]"
-#                 elif sb.installed:
-#                     status_text = "system"
-#                     status = f"[yellow]{status_text:<{status_width}}[/yellow]"
-#                 else:
-#                     status_text = "not installed"
-#                     status = f"[dim]{status_text:<{status_width}}[/dim]"
-#                     version_str = ""
+            if include_uninstalled:
+                status_width = 12
+                if sb.installed_with_pulsar():
+                    status_text = "installed"
+                    status = f"[green]{status_text:<{status_width}}[/green]"
+                elif sb.installed():
+                    status_text = "system"
+                    status = f"[yellow]{status_text:<{status_width}}[/yellow]"
+                else:
+                    status_text = "not installed"
+                    status = f"[dim]{status_text:<{status_width}}[/dim]"
+                    version_str = ""
 
-#                 pulsar_console.console.print(f"{sb.name:<{name_width}} {status} {version_str}")
-#             else:
-#                 pulsar_console.console.print(f"{sb.name:<{name_width}} {version_str}")
+                pulsar_console.console.print(f"{sb.name:<{name_width}} {status} {version_str}")
+            else:
+                pulsar_console.console.print(f"{sb.name:<{name_width}} {version_str}")
         
-#         pulsar_console.console.print()
+        pulsar_console.console.print()
 
-#     else:
-#         for sb in spell_books:
-#             pulsar_console.console.print(f"{sb.name}")
+    else:
+        for sb in spell_books:
+            pulsar_console.console.print(f"{sb.name}")
 
 
 @app.command()
