@@ -114,11 +114,13 @@ def install_spell_books(
 
         future_thread.start()
 
-        while not stop_event.is_set():
+        while True:
             for goblin in goblin_team:
                 progress.update(goblin.task_id, goblin=goblin)
+            if stop_event.is_set(): break
             time.sleep(0.1)
 
         future_thread.join()
+
         progress.stop()
 

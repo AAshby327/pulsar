@@ -63,6 +63,11 @@ def _get_env_or_default(var_name: str, default_path: pathlib.Path) -> pathlib.Pa
     return pathlib.Path(env_value) if env_value else default_path
 
 
+def remove_directories(*paths: pathlib.Path | str) -> None:
+    for path in paths:
+        print("Removing path: ", path)
+
+
 # ============================================================================
 # Pulsar Root Directory
 # ============================================================================
@@ -114,26 +119,24 @@ PULSAR_STATE_DIR = _get_env_or_default(
 # XDG Base Directory Specification
 # ============================================================================
 
-HOME = pathlib.Path.home()
-
 XDG_CONFIG_HOME = _get_env_or_default(
     'XDG_CONFIG_HOME',
-    HOME / '.config'
+    PULSAR_ROOT / '.config'
 )
 
 XDG_CACHE_HOME = _get_env_or_default(
     'XDG_CACHE_HOME',
-    HOME / '.cache'
+    PULSAR_ROOT / '.cache'
 )
 
 XDG_DATA_HOME = _get_env_or_default(
     'XDG_DATA_HOME',
-    HOME / '.local' / 'share'
+    PULSAR_ROOT / '.local' / 'share'
 )
 
 XDG_STATE_HOME = _get_env_or_default(
     'XDG_STATE_HOME',
-    HOME / '.local' / 'state'
+    PULSAR_ROOT / '.local' / 'state'
 )
 
 
@@ -167,8 +170,6 @@ VIRTUAL_ENV = _get_env_or_default(
 # ============================================================================
 # Activation State Management
 # ============================================================================
-
-OUTPUT_DELIMITER = os.environ.get('OUTPUT_DELIMITER', '###SHELL###')
 
 env_vars: dict[str, str] = {}
 path_entries: list[str] = []

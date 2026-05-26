@@ -89,8 +89,8 @@ class SpellBook:
     uninstall: Spell
     on_activate: Spell
 
-    installed: Spell
-    installed_with_pulsar: Spell
+    installed_with_system: Spell[[], bool]
+    installed_with_pulsar: Spell[[], bool]
     version: Spell[[], str]
 
     typer_app: typer.Typer
@@ -123,7 +123,7 @@ class SpellBook:
         self.uninstall = Spell(self.typer_app.command('uninstall'))
         self.on_activate = Spell()
 
-        self.installed = Spell()
+        self.installed_with_system = Spell()
         self.installed_with_pulsar = Spell()
         self.version = Spell(self.typer_app.command('version'))
 
@@ -135,6 +135,10 @@ class SpellBook:
 
     def __repr__(self):
         return f"<SpellBooK: {self.name}>"
+
+    def is_installed(self) -> bool:
+        return self.installed_with_pulsar() \
+        or self.installed_with_system()
 
 class BrokenSpellBook(SpellBook):
     

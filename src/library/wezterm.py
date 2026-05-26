@@ -25,8 +25,13 @@ def install() -> None:
 
     goblin = summoning_circle.summon_goblin_worker(wezterm_book)
 
-    if goblin.reinstall_command:
-        uninstall()
+    if wezterm_book.is_installed():
+        if goblin.reinstall_command:
+            uninstall()
+        else:
+            goblin.logger.info("Wezterm already installed.")
+            goblin.complete()
+            return
 
     locked_data = star_map.read('wezterm')
     version = _get_version(goblin, locked_data)
@@ -54,7 +59,7 @@ def uninstall() -> None:
     # Remove the wezterm directory for both Linux and Windows
     install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
     if install_dir.exists():
-        shutil.rmtree(install_dir)
+        pulsar_env.remove_directories(install_dir)
 
 @wezterm_book.typer_app.callback(invoke_without_command=True)
 def launch(ctx: typer.Context) -> None:
@@ -108,11 +113,10 @@ def check_pulsar_installation() -> bool:
         return exe_path.exists()
     return False
 
-@wezterm_book.installed.define()
+@wezterm_book.installed_with_system.define()
 def check_system_installation() -> bool:
     """Check if wezterm is installed system-wide."""
-    return shutil.which('wezterm') is not None \
-    or check_pulsar_installation()
+    return shutil.which('wezterm') is not None
 
 @wezterm_book.version.define()
 def get_installed_version() -> str | None:
@@ -247,7 +251,7 @@ def _install_linux(goblin: SummonerGoblin, download_path: pathlib.Path, version:
     install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
     if install_dir.exists():
         goblin.logger.info('Removing existing installation')
-        shutil.rmtree(install_dir)
+        pulsar_env.remove_directories(install_dir)
 
     goblin.logger.info('Moving files to %s', install_dir)
     shutil.move(str(squashfs_root), str(install_dir))
@@ -264,5 +268,5 @@ def _install_windows(goblin: SummonerGoblin, download_path: pathlib.Path, versio
     # Install to a wezterm subdirectory to keep all files together
     install_dir = pulsar_env.PULSAR_BIN_DIR / 'wezterm'
     if install_dir.exists():
-        shutil.rmtree(install_dir)
+        pulsar_env.remove_directories(install_dir)
     shutil.copytree(source_dir, install_dir)

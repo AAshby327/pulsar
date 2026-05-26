@@ -83,6 +83,7 @@ def install(
     import summoning_circle
     
     install_list = []
+    already_installed = []
 
     if all:
         install_list = list(library.catalog.values())
@@ -91,7 +92,17 @@ def install(
             if name not in library.catalog:
                 raise KeyError(f"Unable to find the spell book: '{name}'")
             
-            install_list.append(library.catalog[name])
+            sb = library.catalog[name]
+
+            if not reinstall and sb.is_installed():
+                already_installed.append(sb)
+            else:
+                install_list.append(sb)
+
+    if len(already_installed) > 0:
+        pulsar_console.console.print("[green]Already installed:[/green]")
+        for sb in already_installed:
+            pulsar_console.console.print(f"[green] ✓ {sb.name}[/green]")
 
     summoning_circle.install_spell_books(
         install_list, reinstall, refresh_cache, workers
@@ -174,11 +185,11 @@ def list_command(
     if versions or include_uninstalled:
         # Header
         if include_uninstalled:
-            pulsar_console.console.print(f"{'Spell Book':<{name_width}} {'Status':<12} Version")
-            pulsar_console.console.print(f"{'-' * name_width} {'-' * 12} {'-' * 10}")
+            pulsar_console.console.print(f"{'Spell Book':<{name_width}}   {'Status':<12}   Version")
+            pulsar_console.console.print(f"{'-' * name_width}   {'-' * 12}   {'-' * 10}")
         else:
-            pulsar_console.console.print(f"{'Spell Book':<{name_width}} Version")
-            pulsar_console.console.print(f"{'-' * name_width} {'-' * 10}")
+            pulsar_console.console.print(f"{'Spell Book':<{name_width}}   Version")
+            pulsar_console.console.print(f"{'-' * name_width}   {'-' * 10}")
 
         # Rows
         for sb in spell_books:
@@ -199,9 +210,9 @@ def list_command(
                     status = f"[dim]{status_text:<{status_width}}[/dim]"
                     version_str = ""
 
-                pulsar_console.console.print(f"{sb.name:<{name_width}} {status} {version_str}")
+                pulsar_console.console.print(f"{sb.name:<{name_width}}   {status}   {version_str}")
             else:
-                pulsar_console.console.print(f"{sb.name:<{name_width}} {version_str}")
+                pulsar_console.console.print(f"{sb.name:<{name_width}}   {version_str}")
         
         pulsar_console.console.print()
 
@@ -268,9 +279,10 @@ def clean(
     pulsar_console.console.print("[bold cyan]Cleaning directories...[/bold cyan]")
 
     # Remove directories
-    for d in dirs_to_remove:
-        pulsar_console.console.print(f"  Removing {d.name}...")
-        shutil.rmtree(d)
+    # for d in dirs_to_remove:
+    #     pulsar_console.console.print(f"  Removing {d.name}...")
+    #     pulsar_env.remove_directories(d)
+    pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("[bold green]✓ Clean complete![/bold green]\n")
 
@@ -307,10 +319,11 @@ def reset(
 
     pulsar_console.console.print("[bold cyan]Resetting Pulsar environment...[/bold cyan]")
 
-    for d in dirs_to_remove:
-        if d.exists():
-            pulsar_console.console.print(f"  Removing {d.name}...")
-            shutil.rmtree(d)
+    # for d in dirs_to_remove:
+    #     if d.exists():
+    #         pulsar_console.console.print(f"  Removing {d.name}...")
+    #         pulsar_env.remove_directories(d)
+    pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("[bold green]✓ Reset complete![/bold green]")
     pulsar_console.console.print("[dim]Run 'source activate' to reinitialize the environment.[/dim]\n")
@@ -354,18 +367,21 @@ def nuke(
     pulsar_console.console.print("[bold cyan]Nuking Pulsar environment...[/bold cyan]")
 
     # Remove main directories
-    for d in dirs_to_remove:
-        if d.exists():
-            pulsar_console.console.print(f"  Removing {d.name}...")
-            shutil.rmtree(d)
+    # for d in dirs_to_remove:
+    #     if d.exists():
+    #         pulsar_console.console.print(f"  Removing {d.name}...")
+    #         pulsar_env.remove_directories(d)
+    pulsar_env.remove_directories(*dirs_to_remove)
 
     # Remove all __pycache__ directories
     pulsar_console.console.print("  Removing __pycache__ directories...")
-    for pycache_dir in pulsar_env.PULSAR_ROOT.rglob('__pycache__'):
-        try:
-            shutil.rmtree(pycache_dir)
-        except Exception:
-            pass
+    # for pycache_dir in pulsar_env.PULSAR_ROOT.rglob('__pycache__'):
+    #     try:
+    #         pulsar_env.remove_directories(pycache_dir)
+    #     except Exception:
+    #         pass
+
+    pulsar_env.remove_directories(*tuple(pulsar_env.PULSAR_ROOT.rglob('__pycache__')))
 
     pulsar_console.console.print("[bold green]✓ Nuke complete![/bold green]")
     pulsar_console.console.print("[dim]Run 'source activate' to reinitialize the environment.[/dim]\n")
