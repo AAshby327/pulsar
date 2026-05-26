@@ -26,7 +26,7 @@ export UV_TOOL_DIR="${PULSAR_DATA_DIR}/uv/tools"
 export UV_PYTHON_INSTALL_DIR="${PULSAR_DATA_DIR}/uv/python"
 export UV_CACHE_DIR="${PULSAR_CACHE_DIR}/uv"
 export UV_PROJECT_ENVIRONMENT="${PULSAR_ROOT}/.venv"
-export VIRTUAL_ENV=UV_PROJECT_ENVIRONMENT
+export VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT
 
 # System config for pulsar
 export SHELL="bash"

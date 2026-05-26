@@ -277,11 +277,6 @@ def clean(
             raise typer.Exit(code=0)
 
     pulsar_console.console.print("[bold cyan]Cleaning directories...[/bold cyan]")
-
-    # Remove directories
-    # for d in dirs_to_remove:
-    #     pulsar_console.console.print(f"  Removing {d.name}...")
-    #     pulsar_env.remove_directories(d)
     pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("[bold green]✓ Clean complete![/bold green]\n")
@@ -318,11 +313,6 @@ def reset(
             raise typer.Exit(code=0)
 
     pulsar_console.console.print("[bold cyan]Resetting Pulsar environment...[/bold cyan]")
-
-    # for d in dirs_to_remove:
-    #     if d.exists():
-    #         pulsar_console.console.print(f"  Removing {d.name}...")
-    #         pulsar_env.remove_directories(d)
     pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("[bold green]✓ Reset complete![/bold green]")
@@ -366,21 +356,9 @@ def nuke(
 
     pulsar_console.console.print("[bold cyan]Nuking Pulsar environment...[/bold cyan]")
 
-    # Remove main directories
-    # for d in dirs_to_remove:
-    #     if d.exists():
-    #         pulsar_console.console.print(f"  Removing {d.name}...")
-    #         pulsar_env.remove_directories(d)
     pulsar_env.remove_directories(*dirs_to_remove)
 
-    # Remove all __pycache__ directories
     pulsar_console.console.print("  Removing __pycache__ directories...")
-    # for pycache_dir in pulsar_env.PULSAR_ROOT.rglob('__pycache__'):
-    #     try:
-    #         pulsar_env.remove_directories(pycache_dir)
-    #     except Exception:
-    #         pass
-
     pulsar_env.remove_directories(*tuple(pulsar_env.PULSAR_ROOT.rglob('__pycache__')))
 
     pulsar_console.console.print("[bold green]✓ Nuke complete![/bold green]")
