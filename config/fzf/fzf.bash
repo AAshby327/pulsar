@@ -1,5 +1,5 @@
 # fzf configuration and useful functions for bash
-# This file is sourced when the Pulsar environment is activated
+# This file is sourced when the pulsar environment is activated
 
 # -----------------------------------------------------------------------------
 # FZF Default Options

@@ -45,7 +45,7 @@ for spell_book in library.catalog.values():
 
 
 def show_banner():
-    """Display a random Pulsar banner."""
+    """Display a random pulsar banner."""
     pulsar_console.console.print(ASCII_ART, style='bold blue', markup=False, highlight=False)
     pulsar_console.console.print(
         "By Andrew Ashby\n",
@@ -56,7 +56,7 @@ def show_banner():
 @app.command(hidden=True)
 def activate():
     """
-    Activate the Pulsar environment.
+    Activate the pulsar environment.
     """
     for sb in library.catalog.values():
         sb.on_activate()
@@ -286,7 +286,7 @@ def reset(
     yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
-    Reset Pulsar environment by deleting bin and .venv directories.
+    Reset pulsar environment by deleting bin and .venv directories.
 
     This will remove all installed packages and the virtual environment.
     The environment will be reinitialized on next activation.
@@ -311,7 +311,7 @@ def reset(
             pulsar_console.console.print("[dim]Reset cancelled[/dim]\n")
             raise typer.Exit(code=0)
 
-    pulsar_console.console.print("[bold cyan]Resetting Pulsar environment...[/bold cyan]")
+    pulsar_console.console.print("[bold cyan]Resetting pulsar environment...[/bold cyan]")
     pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("[bold green]✓ Reset complete![/bold green]")
@@ -323,7 +323,7 @@ def nuke(
     yes: bool = typer.Option(False, '--yes', '-y', help="Skip confirmation"),
 ):
     """
-    Completely nuke the Pulsar environment.
+    Completely nuke the pulsar environment.
 
     This will delete all cache, data, state, bin, .venv, and __pycache__ directories.
     Use this for a complete clean slate.
@@ -353,7 +353,7 @@ def nuke(
             pulsar_console.console.print("[dim]Nuke cancelled[/dim]\n")
             raise typer.Exit(code=0)
 
-    pulsar_console.console.print("[bold cyan]Nuking Pulsar environment...[/bold cyan]")
+    pulsar_console.console.print("[bold cyan]Nuking pulsar environment...[/bold cyan]")
 
     pulsar_env.remove_directories(*dirs_to_remove)
 
@@ -364,10 +364,58 @@ def nuke(
     pulsar_console.console.print("[dim]Run 'source activate' to reinitialize the environment.[/dim]\n")
 
 
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True}, add_help_option=False)
+def uv(
+    ctx: typer.Context,
+):
+    """
+    Wrapper for the pulsar uv project.
+    """
+    import subprocess
+
+    uv_bin = pathlib.Path(pulsar_env.PULSAR_BIN_DIR) / "uv"
+
+    if not uv_bin.exists():
+        pulsar_console.console.print("[red]UV is not installed.[/red]")
+        raise typer.Exit(code=1)
+
+    # Save previous environment variables
+    prev_uv_project_environment = os.environ.get('UV_PROJECT_ENVIRONMENT')
+    prev_virtual_env = os.environ.get('VIRTUAL_ENV')
+    prev_uv_working_dir = os.environ.get('UV_WORKING_DIR')
+
+    try:
+        # Set pulsar UV environment
+        os.environ['UV_PROJECT_ENVIRONMENT'] = str(pulsar_env.PULSAR_VENV_DIR)
+        os.environ['VIRTUAL_ENV'] = str(pulsar_env.PULSAR_VENV_DIR)
+        os.environ['UV_WORKING_DIR'] = str(pulsar_env.PULSAR_SRC_DIR)
+
+        # Forward all arguments to uv
+        result = subprocess.run([str(uv_bin)] + ctx.args)
+        raise typer.Exit(code=result.returncode)
+
+    finally:
+        # Restore or unset environment variables
+        if prev_uv_project_environment is not None:
+            os.environ['UV_PROJECT_ENVIRONMENT'] = prev_uv_project_environment
+        else:
+            os.environ.pop('UV_PROJECT_ENVIRONMENT', None)
+
+        if prev_virtual_env is not None:
+            os.environ['VIRTUAL_ENV'] = prev_virtual_env
+        else:
+            os.environ.pop('VIRTUAL_ENV', None)
+
+        if prev_uv_working_dir is not None:
+            os.environ['UV_WORKING_DIR'] = prev_uv_working_dir
+        else:
+            os.environ.pop('UV_WORKING_DIR', None)
+
+
 @app.command()
 def version():
     """
-    Show Pulsar version.
+    Show pulsar version.
     """
     import tomllib
 
@@ -376,7 +424,7 @@ def version():
     with open(pyproject_path, 'rb') as f:
         data = tomllib.load(f)
         version_str = data.get('project', {}).get('version', 'unknown')
-        pulsar_console.console.print(f"Pulsar version: [bold cyan]{version_str}[/bold cyan]")
+        pulsar_console.console.print(f"pulsar version: [bold cyan]{version_str}[/bold cyan]")
 
 
 def __flush_enchantments(*args, **kwargs):

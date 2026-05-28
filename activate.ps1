@@ -13,6 +13,8 @@ $env:PULSAR_CACHE_DIR = Join-Path $PULSAR_ROOT ".cache"
 $env:PULSAR_DATA_DIR = Join-Path $PULSAR_ROOT ".data"
 $env:PULSAR_STATE_DIR = Join-Path $PULSAR_ROOT ".state"
 $env:PULSAR_VENV_DIR = Join-Path $PULSAR_ROOT ".venv"
+$env:PULSAR_SHELL_COMMANDS_DIR = Join-Path $env:PULSAR_STATE_DIR "pulsar\shell_commands"
+$env:PULSAR_SHELL = "powershell"
 
 # Create directory structure
 New-Item -ItemType Directory -Force -Path $env:PULSAR_BIN_DIR | Out-Null
@@ -21,6 +23,7 @@ New-Item -ItemType Directory -Force -Path $env:PULSAR_CONFIG_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path "$env:PULSAR_DATA_DIR\uv\python" | Out-Null
 New-Item -ItemType Directory -Force -Path "$env:PULSAR_DATA_DIR\uv\tools" | Out-Null
 New-Item -ItemType Directory -Force -Path $env:PULSAR_STATE_DIR | Out-Null
+New-Item -ItemType Directory -Force -Path $env:PULSAR_SHELL_COMMANDS_DIR | Out-Null
 
 # Set XDG directories for portable apps
 $env:XDG_CONFIG_HOME = $env:PULSAR_CONFIG_DIR
@@ -33,12 +36,8 @@ $env:UV_TOOL_DIR = "$env:PULSAR_DATA_DIR\uv\tools"
 $env:UV_PYTHON_INSTALL_DIR = "$env:PULSAR_DATA_DIR\uv\python"
 $env:UV_CACHE_DIR = "$env:PULSAR_CACHE_DIR\uv"
 
-# System config for pulsar
-$env:SHELL = "powershell"
-$env:OUTPUT_DELIMITER = "###SHELL###"
-
 # UV wrapper function that temporarily sets environment variables
-function PULSAR_UV_WRAPPER {
+function _pulsar_uv_wrapper {
     # Save current environment variables
     $prevUvProjectEnv = $env:UV_PROJECT_ENVIRONMENT
     $prevVirtualEnv = $env:VIRTUAL_ENV
@@ -99,7 +98,7 @@ if (-not (Test-Path $uvPath)) {
         # Run cached installer script
         & $cachedInstaller
 
-        PULSAR_UV_WRAPPER sync
+        _pulsar_uv_wrapper sync
     } catch {
         Write-Host "[ERROR] Failed to install uv: $_" -ForegroundColor Red
         throw
@@ -109,16 +108,18 @@ if (-not (Test-Path $uvPath)) {
 # Add bin directory to PATH
 $env:PATH = "$env:PULSAR_BIN_DIR;$env:PATH"
 
-$output = & "$env:PULSAR_VENV_DIR\Scripts\python.exe" "$env:PULSAR_SRC_DIR\pulsar.py" "activate"
-if ($output) {
-    $outputStr = $output -join "`n"
-    Invoke-Expression $outputStr
-}
-
 # Define pulsar function
 function global:pulsar {
-    PULSAR_UV_WRAPPER run "$env:PULSAR_SRC_DIR\pulsar.py" @args
+    $env:PULSAR_SHELL_FILE="$env:PULSAR_SHELL_COMMANDS_DIR\$PID.ps1"
+    _pulsar_uv_wrapper run "$env:PULSAR_SRC_DIR\pulsar.py" @args
+    if (Test-Path $env:PULSAR_SHELL_FILE) {
+        . $env:PULSAR_SHELL_FILE
+        Remove-Item -Path $env:PULSAR_SHELL_FILE
+    }
+    Remove-Item Env:PULSAR_SHELL_FILE
 }
 
 # Define aliases
 Set-Alias -Name psr -Value pulsar -Scope Global -Force
+
+pulsar activate

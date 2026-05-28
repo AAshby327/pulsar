@@ -9,6 +9,8 @@ export PULSAR_CACHE_DIR="${PULSAR_ROOT}/.cache"
 export PULSAR_DATA_DIR="${PULSAR_ROOT}/.data"
 export PULSAR_STATE_DIR="${PULSAR_ROOT}/.state"
 export PULSAR_VENV_DIR="${PULSAR_ROOT}/.venv"
+export PULSAR_SHELL_COMMANDS_DIR="${PULSAR_STATE_DIR}/pulsar/shell_commands"
+export PULSAR_SHELL="bash"
 
 # Create directory structure
 mkdir -p "${PULSAR_BIN_DIR}"
@@ -17,6 +19,7 @@ mkdir -p "${PULSAR_CONFIG_DIR}"
 mkdir -p "${PULSAR_DATA_DIR}/uv/python"
 mkdir -p "${PULSAR_DATA_DIR}/uv/tools"
 mkdir -p "${PULSAR_STATE_DIR}"
+mkdir -p "${PULSAR_SHELL_COMMANDS_DIR}"
 
 # Set XDG directories for portable apps
 export XDG_CONFIG_HOME="${PULSAR_CONFIG_DIR}"
@@ -29,11 +32,7 @@ export UV_TOOL_DIR="${PULSAR_DATA_DIR}/uv/tools"
 export UV_PYTHON_INSTALL_DIR="${PULSAR_DATA_DIR}/uv/python"
 export UV_CACHE_DIR="${PULSAR_CACHE_DIR}/uv"
 
-# System config for pulsar
-export SHELL="bash"
-export OUTPUT_DELIMITER="###SHELL###"
-
-PULSAR_UV_WRAPPER() {
+_pulsar_uv_wrapper() {
     local prev_uv_project_environment=${UV_PROJECT_ENVIRONMENT:-}
     local prev_virtual_env=${VIRTUAL_ENV:-}
     local prev_uv_working_dir=${UV_WORKING_DIR:-}
@@ -84,16 +83,22 @@ if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
     # Run cached installer script
     sh "${CACHED_INSTALLER}"
 
-    PULSAR_UV_WRAPPER sync
+    _pulsar_uv_wrapper sync
 fi
 
 # Add bin and UV tools to PATH
 export PATH="${PULSAR_BIN_DIR}:${PATH}"
 
-eval "$(${PULSAR_VENV_DIR}/bin/python ${PULSAR_SRC_DIR}/pulsar.py activate)"
-
 pulsar() {
-    PULSAR_UV_WRAPPER run ${PULSAR_SRC_DIR}/pulsar.py "$@"
+    export PULSAR_SHELL_FILE="${PULSAR_SHELL_COMMANDS_DIR}/$$.sh"
+    _pulsar_uv_wrapper run ${PULSAR_SRC_DIR}/pulsar.py "$@"
+    if [[ -f $PULSAR_SHELL_FILE ]]; then
+        source $PULSAR_SHELL_FILE
+        rm $PULSAR_SHELL_FILE
+    fi
+    unset PULSAR_SHELL_FILE
 }
 
 alias psr=pulsar
+
+pulsar activate

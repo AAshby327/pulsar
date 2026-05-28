@@ -4,7 +4,7 @@ local config = wezterm.config_builder()
 -- Detect platform
 local is_windows = wezterm.target_triple:find('windows') ~= nil
 
--- Set up Pulsar environment variables
+-- Set up pulsar environment variables
 -- Try to detect PULSAR_ROOT from environment first
 local pulsar_root = os.getenv('PULSAR_ROOT')
 
@@ -48,7 +48,7 @@ config.set_environment_variables = {
   PATH = pulsar_bin .. path_sep .. pulsar_local_bin .. path_sep .. os.getenv('PATH'),
 }
 
--- Configure shell to source the appropriate Pulsar activation script
+-- Configure shell to source the appropriate pulsar activation script
 if is_windows then
 
   local function command_exists(cmd)

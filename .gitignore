@@ -23,6 +23,3 @@ config/uv/uv-receipt.json
 *.AppImage
 *.deb
 *.rpm
-
-# Claude Code
-.claude/

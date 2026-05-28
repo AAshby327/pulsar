@@ -1,6 +1,8 @@
 import pulsar_env
 
 def enchant_shell():
+
+    # print('enchant shell called')
     
     output = ''
     if pulsar_env.SHELL == 'bash':
@@ -12,10 +14,11 @@ def enchant_shell():
 
     if len(output) == 0:
         return
-    
-    print(pulsar_env.OUTPUT_DELIMITER)
-    print(output)
-    print(pulsar_env.OUTPUT_DELIMITER)
+
+    file_name = pulsar_env.PULSAR_SHELL_FILE
+
+    with open(file_name, 'w') as f:
+        f.write(output)
 
 
 def _get_bash_script() -> str:
