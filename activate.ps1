@@ -1,7 +1,11 @@
 # Pulsar activation script for PowerShell
-# Determine PULSAR_ROOT from script location
-$PULSAR_ROOT = Split-Path -Parent $PSCommandPath
-$env:PULSAR_ROOT = $PULSAR_ROOT
+# Determine PULSAR_ROOT from script location or use existing value
+if (-not $env:PULSAR_ROOT) {
+    $PULSAR_ROOT = Split-Path -Parent $PSCommandPath
+    $env:PULSAR_ROOT = $PULSAR_ROOT
+} else {
+    $PULSAR_ROOT = $env:PULSAR_ROOT
+}
 $env:PULSAR_BIN_DIR = Join-Path $PULSAR_ROOT "bin"
 $env:PULSAR_SRC_DIR = Join-Path $PULSAR_ROOT "src"
 $env:PULSAR_CONFIG_DIR = Join-Path $PULSAR_ROOT "config"

@@ -1,4 +1,6 @@
-PULSAR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -z "${PULSAR_ROOT}" ]]; then
+    PULSAR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 export PULSAR_ROOT
 export PULSAR_BIN_DIR="${PULSAR_ROOT}/bin"
 export PULSAR_SRC_DIR="${PULSAR_ROOT}/src"

@@ -77,7 +77,7 @@ if is_windows then
   end
 else
   -- Linux: use bash with rcfile
-  local activate_path = pulsar_root .. dir_sep .. 'activate'
+  local activate_path = pulsar_root .. dir_sep .. 'activate.sh'
   config.default_prog = { '/bin/bash', '--rcfile', activate_path }
 end
 
