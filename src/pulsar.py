@@ -4,7 +4,6 @@ Pulsar - A Python Package Manager CLI
 import os
 import sys
 import typing
-import shutil
 import pathlib
 
 import typer
@@ -298,7 +297,7 @@ def reset(
     """
     dirs_to_remove = [
         pulsar_env.PULSAR_BIN_DIR,
-        pulsar_env.VIRTUAL_ENV,
+        pulsar_env.PULSAR_VENV_DIR,
     ]
 
     pulsar_console.console.print(f"\n[bold yellow]⚠ WARNING:[/bold yellow] This will delete the following directories:")
@@ -339,7 +338,7 @@ def nuke(
         pulsar_env.PULSAR_DATA_DIR,
         pulsar_env.PULSAR_STATE_DIR,
         pulsar_env.PULSAR_BIN_DIR,
-        pulsar_env.VIRTUAL_ENV,
+        pulsar_env.PULSAR_VENV_DIR,
     ]
 
     pulsar_console.console.print(f"\n[bold red]⚠ WARNING:[/bold red] This will delete the following directories:")
@@ -359,7 +358,7 @@ def nuke(
     pulsar_env.remove_directories(*dirs_to_remove)
 
     pulsar_console.console.print("  Removing __pycache__ directories...")
-    pulsar_env.remove_directories(*tuple(pulsar_env.PULSAR_ROOT.rglob('__pycache__')))
+    pulsar_env.remove_directories(*tuple(pulsar_env.PULSAR_SRC_DIR.rglob('__pycache__')))
 
     pulsar_console.console.print("[bold green]✓ Nuke complete![/bold green]")
     pulsar_console.console.print("[dim]Run 'source activate' to reinitialize the environment.[/dim]\n")

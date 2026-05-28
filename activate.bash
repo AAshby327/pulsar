@@ -6,6 +6,7 @@ export PULSAR_CONFIG_DIR="${PULSAR_ROOT}/config"
 export PULSAR_CACHE_DIR="${PULSAR_ROOT}/.cache"
 export PULSAR_DATA_DIR="${PULSAR_ROOT}/.data"
 export PULSAR_STATE_DIR="${PULSAR_ROOT}/.state"
+export PULSAR_VENV_DIR="${PULSAR_ROOT}/.venv"
 
 # Create directory structure
 mkdir -p "${PULSAR_BIN_DIR}"
@@ -25,12 +26,45 @@ export XDG_STATE_HOME="${PULSAR_STATE_DIR}"
 export UV_TOOL_DIR="${PULSAR_DATA_DIR}/uv/tools"
 export UV_PYTHON_INSTALL_DIR="${PULSAR_DATA_DIR}/uv/python"
 export UV_CACHE_DIR="${PULSAR_CACHE_DIR}/uv"
-export UV_PROJECT_ENVIRONMENT="${PULSAR_ROOT}/.venv"
-export VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT
 
 # System config for pulsar
 export SHELL="bash"
 export OUTPUT_DELIMITER="###SHELL###"
+
+PULSAR_UV_WRAPPER() {
+    local prev_uv_project_environment=${UV_PROJECT_ENVIRONMENT:-}
+    local prev_virtual_env=${VIRTUAL_ENV:-}
+    local prev_uv_working_dir=${UV_WORKING_DIR:-}
+
+    export UV_PROJECT_ENVIRONMENT=$PULSAR_VENV_DIR
+    export VIRTUAL_ENV=$PULSAR_VENV_DIR
+    export UV_WORKING_DIR=$PULSAR_SRC_DIR
+
+    if [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
+        ${PULSAR_BIN_DIR}/uv "$@"
+    else
+        echo "UV is not installed."
+    fi
+
+    # Restore or unset environment variables
+    if [[ -n $prev_uv_project_environment ]]; then
+        export UV_PROJECT_ENVIRONMENT=$prev_uv_project_environment
+    else
+        unset UV_PROJECT_ENVIRONMENT
+    fi
+
+    if [[ -n $prev_virtual_env ]]; then
+        export VIRTUAL_ENV=$prev_virtual_env
+    else
+        unset VIRTUAL_ENV
+    fi
+
+    if [[ -n $prev_uv_working_dir ]]; then
+        export UV_WORKING_DIR=$prev_uv_working_dir
+    else
+        unset UV_WORKING_DIR
+    fi
+}
 
 # Install uv if not already
 if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
@@ -48,21 +82,16 @@ if ! [[ -f "${PULSAR_BIN_DIR}/uv" ]]; then
     # Run cached installer script
     sh "${CACHED_INSTALLER}"
 
-    ${PULSAR_BIN_DIR}/uv sync --directory "${PULSAR_SRC_DIR}"
+    PULSAR_UV_WRAPPER sync
 fi
 
 # Add bin and UV tools to PATH
 export PATH="${PULSAR_BIN_DIR}:${PATH}"
 
-eval "$(${VIRTUAL_ENV}/bin/python ${PULSAR_SRC_DIR}/pulsar.py activate)"
+eval "$(${PULSAR_VENV_DIR}/bin/python ${PULSAR_SRC_DIR}/pulsar.py activate)"
 
 pulsar() {
-    if [[ "$1" == "reload" ]]; then
-        source "${PULSAR_ROOT}/activate"
-    else
-        # Pass through other commands normally
-        ${VIRTUAL_ENV}/bin/python ${PULSAR_SRC_DIR}/pulsar.py "$@"
-    fi
+    PULSAR_UV_WRAPPER run ${PULSAR_SRC_DIR}/pulsar.py "$@"
 }
 
 alias psr=pulsar

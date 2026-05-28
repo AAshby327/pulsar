@@ -65,7 +65,7 @@ def uninstall() -> None:
 def launch(ctx: typer.Context) -> None:
     """Launch Wezterm terminal"""
     if ctx.invoked_subcommand is None:
-        if not wezterm_book.installed_with_pulsar:
+        if not wezterm_book.installed_with_pulsar():
             typer.echo("Wezterm is not installed. Run 'pulsar install wezterm' first.")
             raise typer.Exit(code=1)
 

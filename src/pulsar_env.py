@@ -114,6 +114,11 @@ PULSAR_STATE_DIR = _get_env_or_default(
     PULSAR_ROOT / '.local' / 'state'
 )
 
+PULSAR_VENV_DIR = _get_env_or_default(
+    'PULSAR_VENV_DIR',
+    PULSAR_ROOT / '.venv'
+)
+
 
 # ============================================================================
 # XDG Base Directory Specification
@@ -159,11 +164,6 @@ UV_PYTHON_INSTALL_DIR = _get_env_or_default(
 UV_CACHE_DIR = _get_env_or_default(
     'UV_CACHE_DIR',
     PULSAR_CACHE_DIR / 'uv'
-)
-
-VIRTUAL_ENV = _get_env_or_default(
-    'VIRTUAL_ENV',
-    PULSAR_ROOT / '.venv'
 )
 
 
