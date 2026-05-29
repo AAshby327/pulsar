@@ -58,6 +58,16 @@ def activate():
     """
     Activate the pulsar environment.
     """
+
+    if pulsar_env.SHELL == 'bash':
+        pulsar_env.add_source_file(
+            pulsar_env.PULSAR_CONFIG_DIR / 'bash' / 'bashrc.sh'
+        )
+    elif pulsar_env.SHELL == 'powershell':
+        pulsar_env.add_source_file(
+            pulsar_env.PULSAR_CONFIG_DIR / 'powershell' / 'pwshrc.ps1'
+        )
+
     for sb in library.catalog.values():
         sb.on_activate()
 

@@ -158,5 +158,13 @@ def add_source_file(file_path: str):
     Args:
         file_path: Path to the shell script file to source
     """
+
+    path = pathlib.Path(file_path)
+
+    assert path.is_file()
+    assert path.exists()
+    if SHELL == 'powershell':
+        assert path.suffix == '.ps1'
+
     if file_path not in source_files:
         source_files.append(file_path)
