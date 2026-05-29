@@ -1,3 +1,12 @@
+
+# Check for --debug flag
+if [[ "$1" == "--debug" ]]; then
+    PULSAR_DEBUG=1
+elif [[ -z "${PULSAR_DEBUG}" ]]; then
+    PULSAR_DEBUG=0
+fi
+export PULSAR_ROOT
+
 if [[ -z "${PULSAR_ROOT}" ]]; then
     PULSAR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
@@ -93,6 +102,11 @@ pulsar() {
     export PULSAR_SHELL_FILE="${PULSAR_SHELL_COMMANDS_DIR}/$$.sh"
     _pulsar_uv_wrapper run ${PULSAR_SRC_DIR}/pulsar.py "$@"
     if [[ -f $PULSAR_SHELL_FILE ]]; then
+        if (( $PULSAR_DEBUG )); then
+            echo "@DEBUG Bash commands:"
+            cat "$PULSAR_SHELL_FILE"
+            echo ""
+        fi
         source $PULSAR_SHELL_FILE
         rm $PULSAR_SHELL_FILE
     fi

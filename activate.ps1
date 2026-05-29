@@ -1,4 +1,12 @@
 # Pulsar activation script for PowerShell
+
+# Check for --debug flag
+if ($args -contains "--debug") {
+    $env:PULSAR_DEBUG = "1"
+} elseif (-not $env:PULSAR_DEBUG) {
+    $env:PULSAR_DEBUG = "0"
+}
+
 # Determine PULSAR_ROOT from script location or use existing value
 if (-not $env:PULSAR_ROOT) {
     $PULSAR_ROOT = Split-Path -Parent $PSCommandPath
@@ -113,6 +121,10 @@ function global:pulsar {
     $env:PULSAR_SHELL_FILE="$env:PULSAR_SHELL_COMMANDS_DIR\$PID.ps1"
     _pulsar_uv_wrapper run "$env:PULSAR_SRC_DIR\pulsar.py" @args
     if (Test-Path $env:PULSAR_SHELL_FILE) {
+        if ($env:PULSAR_DEBUG -eq "1") {
+            Write-Host "@DEBUG Powershell commands:"
+            Get-Content $env:PULSAR_SHELL_FILE
+        }
         . $env:PULSAR_SHELL_FILE
         Remove-Item -Path $env:PULSAR_SHELL_FILE
     }
