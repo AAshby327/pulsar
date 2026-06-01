@@ -79,7 +79,7 @@ class SpellBook:
     BROKEN: type['BrokenSpellBook'] = None
 
     name: str
-    script: str
+    script: pathlib.Path
 
     logger: logging.Logger
 
@@ -105,7 +105,7 @@ class SpellBook:
     ):
         self.name = name
         caller_frame = inspect.stack()[1]
-        self.script = caller_frame.filename
+        self.script = pathlib.Path(caller_frame.filename)
         caller_module_name = caller_frame.frame.f_globals['__name__']
         self.logger = logging.getLogger(caller_module_name)
 

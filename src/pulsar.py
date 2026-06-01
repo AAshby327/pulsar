@@ -383,7 +383,8 @@ def uv(
     """
     import subprocess
 
-    uv_bin = pathlib.Path(pulsar_env.PULSAR_BIN_DIR) / "uv"
+    exe_name = 'uv.exe' if pulsar_env.OS == 'windows' else 'uv'
+    uv_bin = pathlib.Path(pulsar_env.PULSAR_BIN_DIR) / exe_name
 
     if not uv_bin.exists():
         pulsar_console.console.print("[red]UV is not installed.[/red]")
