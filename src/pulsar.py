@@ -1,19 +1,11 @@
 """
 Pulsar - A Python Package Manager CLI
 """
-import os
-import sys
 import typing
-import pathlib
+import time
+start_time = time.time()
 
 import typer
-
-sys.path.append(
-    os.environ.get(
-        'PULSAR_ROOT', 
-        os.path.join(os.path.dirname(__file__), '..')
-    )
-)
 
 import pulsar_env
 import shell_integration
@@ -31,18 +23,12 @@ r'''
 ###         ########  ########## ########  ###     ### ###    ###
 '''
 
-library.import_all()
-
 app = typer.Typer(
     name='pulsar',
     help="Pulsar - Python Package Manager",
     add_completion=True,
     rich_markup_mode='rich',
 )
-
-for spell_book in library.catalog.values():
-    app.add_typer(spell_book.typer_app, rich_help_panel='Spell Books')
-
 
 def show_banner():
     """Display a random pulsar banner."""
@@ -245,6 +231,7 @@ def clean(
         pulsar clean --cache --data     # Clean cache and data
         pulsar clean --cache --yes      # Skip confirmation
     """
+    import pathlib
 
     # If neither flag is set, show error
     if not cache and not data:
@@ -381,6 +368,8 @@ def uv(
     """
     Wrapper for the pulsar uv project.
     """
+    import os
+    import pathlib
     import subprocess
 
     exe_name = 'uv.exe' if pulsar_env.OS == 'windows' else 'uv'
@@ -430,7 +419,7 @@ def version():
     """
     import tomllib
 
-    pyproject_path = os.path.join(os.path.dirname(__file__), 'pyproject.toml')
+    pyproject_path = pulsar_env.PULSAR_SRC_DIR / 'pyproject.toml'
 
     with open(pyproject_path, 'rb') as f:
         data = tomllib.load(f)
@@ -440,6 +429,9 @@ def version():
 
 def __flush_enchantments(*args, **kwargs):
     shell_integration.enchant_shell()
+    if pulsar_env.PULSAR_DEBUG:
+        exe_time_ms = (time.time() - start_time) * 1000
+        pulsar_console.console.print(f"Finished in {exe_time_ms:.2f}ms", style='dim')
 
 
 @app.callback(invoke_without_command=True, result_callback=__flush_enchantments)
@@ -458,8 +450,8 @@ def main(
         pulsar_console.console.print("[bold]Usage:[/bold] pulsar [COMMAND] [OPTIONS]\n")
         pulsar_console.console.print("Run [cyan]pulsar --help[/cyan] for more information.\n")
 
-
-
 if __name__ == '__main__':
+    library.import_all()
+    for spell_book in library.catalog.values():
+        app.add_typer(spell_book.typer_app, rich_help_panel='Spell Books')
     app()
-

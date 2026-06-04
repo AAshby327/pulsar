@@ -5,7 +5,7 @@ if [[ "$1" == "--debug" ]]; then
 elif [[ -z "${PULSAR_DEBUG}" ]]; then
     PULSAR_DEBUG=0
 fi
-export PULSAR_ROOT
+export PULSAR_DEBUG
 
 if [[ -z "${PULSAR_ROOT}" ]]; then
     PULSAR_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
