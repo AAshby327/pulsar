@@ -12,6 +12,7 @@ import pathlib
 import typer
 
 import pulsar_env
+import pulsar_console
 import star_map
 from spell_book_class import SpellBook
 from summoning_circle.summoner_goblin_class import SummonerGoblin
@@ -66,7 +67,7 @@ def launch(ctx: typer.Context) -> None:
     """Launch Wezterm terminal"""
     if ctx.invoked_subcommand is None:
         if not wezterm_book.installed_with_pulsar():
-            typer.echo("Wezterm is not installed. Run 'pulsar install wezterm' first.")
+            pulsar_console.console.print("Wezterm is not installed. Run 'pulsar install wezterm' first.")
             raise typer.Exit(code=1)
 
         # Determine the wezterm executable path
@@ -98,7 +99,7 @@ def launch(ctx: typer.Context) -> None:
                     start_new_session=True
                 )
         except Exception as e:
-            typer.echo(f"Failed to launch wezterm: {e}")
+            pulsar_console.console.print(f"Failed to launch wezterm: {e}")
             raise typer.Exit(code=1)
         
 @wezterm_book.installed_with_pulsar.define()

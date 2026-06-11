@@ -98,8 +98,8 @@ class SpellBook:
     cache_dir: pathlib.Path
 
     def __init__(
-        self, 
-        name: str, 
+        self,
+        name: str,
         help: str | None = None,
         dependencies: list[typing.Union['SpellBook', str]] | None = None,
     ):
@@ -130,7 +130,6 @@ class SpellBook:
         self.cache_dir = pulsar_env.PULSAR_CACHE_DIR / self.name
 
         import library
-
         library.catalog[self.name] = self
 
     def __repr__(self):

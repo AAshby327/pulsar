@@ -26,8 +26,7 @@ r'''
 app = typer.Typer(
     name='pulsar',
     help="Pulsar - Python Package Manager",
-    add_completion=True,
-    rich_markup_mode='rich',
+    rich_markup_mode="rich",
 )
 
 def show_banner():
@@ -129,18 +128,18 @@ def uninstall(
             uninstall_list.append(library.catalog[name])
 
     if not uninstall_list:
-        typer.echo("No spell books to uninstall.")
+        pulsar_console.console.print("No spell books to uninstall.")
         return
 
     # Show confirmation unless --yes is provided
     if not yes:
-        typer.echo("The following spell books will be uninstalled:")
+        pulsar_console.console.print("The following spell books will be uninstalled:")
         for sb in uninstall_list:
-            typer.echo(f"  - {sb.name}")
+            pulsar_console.console.print(f"  - {sb.name}")
 
         confirm = typer.confirm("Do you want to continue?")
         if not confirm:
-            typer.echo("Uninstall cancelled.")
+            pulsar_console.console.print("Uninstall cancelled.")
             return
 
     for sb in uninstall_list:
@@ -398,18 +397,15 @@ def uv(
         # Restore or unset environment variables
         if prev_uv_project_environment is not None:
             os.environ['UV_PROJECT_ENVIRONMENT'] = prev_uv_project_environment
-        else:
-            os.environ.pop('UV_PROJECT_ENVIRONMENT', None)
+        else: os.environ.pop('UV_PROJECT_ENVIRONMENT', None)
 
         if prev_virtual_env is not None:
             os.environ['VIRTUAL_ENV'] = prev_virtual_env
-        else:
-            os.environ.pop('VIRTUAL_ENV', None)
+        else: os.environ.pop('VIRTUAL_ENV', None)
 
         if prev_uv_working_dir is not None:
             os.environ['UV_WORKING_DIR'] = prev_uv_working_dir
-        else:
-            os.environ.pop('UV_WORKING_DIR', None)
+        else: os.environ.pop('UV_WORKING_DIR', None)
 
 
 @app.command()
