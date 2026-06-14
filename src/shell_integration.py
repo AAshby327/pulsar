@@ -29,7 +29,7 @@ def _get_bash_script() -> str:
         output += f'export PATH="{path}:${{PATH}}"\n'
 
     for file in pulsar_env.source_files:
-        output += f'source {file}\n'
+        output += f'source "{file}"\n'
 
     return output
 
@@ -44,6 +44,6 @@ def _get_pwsh_script() -> str:
         output += f'$env:PATH = "{path};$env:PATH"\n'
 
     for file in pulsar_env.source_files:
-        output += f'. {file}\n'
+        output += f'. "{file}"\n'
 
     return output
