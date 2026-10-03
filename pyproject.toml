@@ -1,0 +1,22 @@
+[project]
+name = "pulsar"
+version = "0.4.0"
+description = "Arcane package manager"
+readme = "README.md"
+authors = [
+    { name = "Andrew Ashby", email = "andrewashby101@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "psutil>=7.2.2",
+    "pygit2>=1.20.1",
+    "rich>=15.0.0",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+pulsar = "pulsar:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"

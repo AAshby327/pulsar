@@ -1,137 +1,88 @@
-# Pulsar activation script for PowerShell
-
-# Check for --debug flag
-if ($args -contains "--debug") {
-    $env:PULSAR_DEBUG = "1"
-} elseif (-not $env:PULSAR_DEBUG) {
-    $env:PULSAR_DEBUG = "0"
+# Detect operating system
+if (-not $IsWindows -and $PSVersionTable.PSVersion.Major -ge 6) {
+    Write-Error "Error: This script only supports Windows systems"
+    Write-Error "Detected OS: $($PSVersionTable.OS)"
+    exit 1
 }
 
-# Determine PULSAR_ROOT from script location or use existing value
-if (-not $env:PULSAR_ROOT) {
-    $PULSAR_ROOT = Split-Path -Parent $PSCommandPath
-    $env:PULSAR_ROOT = $PULSAR_ROOT
-} else {
-    $PULSAR_ROOT = $env:PULSAR_ROOT
+# Detect platform architecture
+$Arch = [System.Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITECTURE')
+
+if ($Arch -ne 'AMD64') {
+    Write-Error "Error: Unsupported platform architecture: $Arch"
+    Write-Error "This script only supports Windows x86_64 (AMD64)"
+    exit 1
 }
-$env:PULSAR_BIN_DIR = Join-Path $PULSAR_ROOT "bin"
-$env:PULSAR_SRC_DIR = Join-Path $PULSAR_ROOT "src"
-$env:PULSAR_CONFIG_DIR = Join-Path $PULSAR_ROOT "config"
-$env:PULSAR_CACHE_DIR = Join-Path $PULSAR_ROOT ".cache"
-$env:PULSAR_DATA_DIR = Join-Path $PULSAR_ROOT ".data"
-$env:PULSAR_STATE_DIR = Join-Path $PULSAR_ROOT ".state"
-$env:PULSAR_VENV_DIR = Join-Path $PULSAR_ROOT ".venv"
-$env:PULSAR_SHELL_COMMANDS_DIR = Join-Path $env:PULSAR_STATE_DIR "pulsar\shell_commands"
-$env:PULSAR_SHELL = "powershell"
+
+$env:PLATFORM = "win-x86_64"
+
+# Pulsar vars
+$env:PULSAR_ROOT = $PSScriptRoot
+$env:PULSAR_CONFIG_DIR = Join-Path $env:PULSAR_ROOT "config"
+$env:PULSAR_SRC_DIR = Join-Path $env:PULSAR_ROOT "src"
+$env:PULSAR_BIN_DIR = Join-Path $env:PULSAR_ROOT "bin"
+$env:PULSAR_DATA_DIR = Join-Path $env:PULSAR_ROOT "data"
+$env:PULSAR_CACHE_DIR = Join-Path $env:PULSAR_ROOT ".cache"
+$env:PULSAR_STATE_DIR = Join-Path $env:PULSAR_ROOT ".state"
+$env:PULSAR_VENV_DIR = Join-Path $env:PULSAR_ROOT ".venv"
 
 # Create directory structure
 New-Item -ItemType Directory -Force -Path $env:PULSAR_BIN_DIR | Out-Null
-New-Item -ItemType Directory -Force -Path "$env:PULSAR_CACHE_DIR\uv" | Out-Null
-New-Item -ItemType Directory -Force -Path $env:PULSAR_CONFIG_DIR | Out-Null
-New-Item -ItemType Directory -Force -Path "$env:PULSAR_DATA_DIR\uv\python" | Out-Null
-New-Item -ItemType Directory -Force -Path "$env:PULSAR_DATA_DIR\uv\tools" | Out-Null
+New-Item -ItemType Directory -Force -Path $env:PULSAR_DATA_DIR | Out-Null
+New-Item -ItemType Directory -Force -Path $env:PULSAR_CACHE_DIR | Out-Null
 New-Item -ItemType Directory -Force -Path $env:PULSAR_STATE_DIR | Out-Null
-New-Item -ItemType Directory -Force -Path $env:PULSAR_SHELL_COMMANDS_DIR | Out-Null
 
 # Set XDG directories for portable apps
 $env:XDG_CONFIG_HOME = $env:PULSAR_CONFIG_DIR
 $env:XDG_CACHE_HOME = $env:PULSAR_CACHE_DIR
 $env:XDG_DATA_HOME = $env:PULSAR_DATA_DIR
 $env:XDG_STATE_HOME = $env:PULSAR_STATE_DIR
-
-# UV environment variables
-$env:UV_TOOL_DIR = "$env:PULSAR_DATA_DIR\uv\tools"
-$env:UV_PYTHON_INSTALL_DIR = "$env:PULSAR_DATA_DIR\uv\python"
-$env:UV_CACHE_DIR = "$env:PULSAR_CACHE_DIR\uv"
-
-# UV wrapper function that temporarily sets environment variables
-function _pulsar_uv_wrapper {
-    # Save current environment variables
-    $prevUvProjectEnv = $env:UV_PROJECT_ENVIRONMENT
-    $prevVirtualEnv = $env:VIRTUAL_ENV
-    $prevUvWorkingDir = $env:UV_WORKING_DIR
-
-    # Set temporary environment variables
-    $env:UV_PROJECT_ENVIRONMENT = $env:PULSAR_VENV_DIR
-    $env:VIRTUAL_ENV = $env:PULSAR_VENV_DIR
-    $env:UV_WORKING_DIR = $env:PULSAR_SRC_DIR
-
-    try {
-        $uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
-        if (Test-Path $uvPath) {
-            & $uvPath @args
-        } else {
-            Write-Host "UV is not installed."
-        }
-    } finally {
-        # Restore or unset environment variables
-        if ($null -ne $prevUvProjectEnv) {
-            $env:UV_PROJECT_ENVIRONMENT = $prevUvProjectEnv
-        } else {
-            Remove-Item Env:\UV_PROJECT_ENVIRONMENT -ErrorAction SilentlyContinue
-        }
-
-        if ($null -ne $prevVirtualEnv) {
-            $env:VIRTUAL_ENV = $prevVirtualEnv
-        } else {
-            Remove-Item Env:\VIRTUAL_ENV -ErrorAction SilentlyContinue
-        }
-
-        if ($null -ne $prevUvWorkingDir) {
-            $env:UV_WORKING_DIR = $prevUvWorkingDir
-        } else {
-            Remove-Item Env:\UV_WORKING_DIR -ErrorAction SilentlyContinue
-        }
-    }
-}
-
-# Install uv if not already installed
-$uvPath = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
-if (-not (Test-Path $uvPath)) {
-    # Download and install uv using cached installer script
-    $env:UV_INSTALL_DIR = $env:PULSAR_BIN_DIR
-    $env:INSTALLER_NO_MODIFY_PATH = "1"
-
-    $cachedInstaller = Join-Path "$env:PULSAR_CACHE_DIR\uv" "install.ps1"
-
-    try {
-        $ErrorActionPreference = 'Stop'
-
-        # Download installer script to cache if not present
-        if (-not (Test-Path $cachedInstaller)) {
-            $installerContent = Invoke-RestMethod https://astral.sh/uv/install.ps1
-            $installerContent | Out-File -FilePath $cachedInstaller -Encoding UTF8
-        }
-
-        # Run cached installer script
-        & $cachedInstaller
-
-        _pulsar_uv_wrapper sync
-    } catch {
-        Write-Host "[ERROR] Failed to install uv: $_" -ForegroundColor Red
-        throw
-    }
-}
-
-# Add bin directory to PATH
 $env:PATH = "$env:PULSAR_BIN_DIR;$env:PATH"
 
-# Define pulsar function
-function global:pulsar {
-    $env:PULSAR_SHELL_FILE="$env:PULSAR_SHELL_COMMANDS_DIR\$PID.ps1"
-    _pulsar_uv_wrapper run "$env:PULSAR_SRC_DIR\pulsar.py" @args
-    if (Test-Path $env:PULSAR_SHELL_FILE) {
-        if ($env:PULSAR_DEBUG -eq "1") {
-            Write-Host "@DEBUG Powershell commands:"
-            Get-Content $env:PULSAR_SHELL_FILE
-        }
-        . $env:PULSAR_SHELL_FILE
-        Remove-Item -Path $env:PULSAR_SHELL_FILE
-    }
-    Remove-Item Env:PULSAR_SHELL_FILE
+# UV environment variables
+$env:UV_TOOL_DIR = Join-Path $env:PULSAR_DATA_DIR "uv\tools"
+$env:UV_PYTHON_INSTALL_DIR = Join-Path $env:PULSAR_DATA_DIR "uv\python"
+$env:UV_CACHE_DIR = Join-Path $env:PULSAR_CACHE_DIR "uv"
+
+$UV_EXE_PATH = Join-Path $env:PULSAR_BIN_DIR "uv.exe"
+
+if (-not (Test-Path $UV_EXE_PATH)) {
+    Write-Host "Extracting uv executable"
+    $uvZipPath = Join-Path $env:PULSAR_ROOT "uv\$env:PLATFORM.zip"
+
+    # Extract using built-in PowerShell (available in PowerShell 5.0+)
+    Expand-Archive -Path $uvZipPath -DestinationPath $env:PULSAR_BIN_DIR -Force
 }
 
-# Define aliases
-Set-Alias -Name psr -Value pulsar -Scope Global -Force
+# UV wrapper function
+function __psr_uv_wrapper {
+    if (Test-Path $UV_EXE_PATH) {
+        $env:UV_PROJECT_ENVIRONMENT = $env:PULSAR_VENV_DIR
+        $env:VIRTUAL_ENV = $env:PULSAR_VENV_DIR
+        $env:UV_WORKING_DIR = $env:PULSAR_SRC_DIR
+        & $UV_EXE_PATH @args
+    } else {
+        Write-Error "uv is not installed."
+    }
+}
 
-pulsar activate
+Write-Host "Syncing virtual environment"
+__psr_uv_wrapper sync
+
+# Pulsar function
+function pulsar {
+    if ($args.Count -gt 0 -and $args[0] -eq "uv") {
+        if ($args.Count -gt 1) {
+            $remainingArgs = $args[1..($args.Count-1)]
+            __psr_uv_wrapper @remainingArgs
+        } else {
+            __psr_uv_wrapper
+        }
+    } else {
+        __psr_uv_wrapper run pulsar @args
+    }
+}
+
+# Alias
+Set-Alias -Name psr -Value pulsar
+

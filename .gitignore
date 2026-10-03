@@ -1,25 +1,14 @@
-# Local development environment
-bin/
-.cache/
-.data/
-.state/
-
-# Python
+# Python-generated files
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-*.egg
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# State directories
+.cache/
+.state/
 .venv/
-
-# UV
-config/uv/uv-receipt.json
-
-# Downloaded packages and temp files
-*.tar.gz
-*.zip
-*.AppImage
-*.deb
-*.rpm
+bin/
+data/
