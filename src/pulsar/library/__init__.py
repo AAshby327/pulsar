@@ -2,9 +2,15 @@ import sys
 
 import typer
 
+from pulsar.summoning_circle import Installer
+
 class SpellBook:
 
     registry = dict[str, 'SpellBook']()
+
+    name: str
+    app: typer.Typer
+    installer: Installer | None
 
     def __init__(
             self, 
@@ -36,3 +42,5 @@ class SpellBook:
             invoke_without_command=invoke_without_command,
             no_args_is_help=no_args_is_help,
         )
+
+        self.installer = None

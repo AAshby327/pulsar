@@ -22,7 +22,10 @@ r'''
 ###         ########  ########## ########  ###     ### ###    ###
 '''
 
-PLATFORM: typing.Literal['win-x86_64', 'linux-x86_64', 'linux-arm_64'] = os.environ['PLATFORM']
+SUPPORTED_PLATFORMS = ('win-x86_64', 'linux-x86_64', 'linux-arm_64')
+
+PLATFORM: typing.Literal['win-x86_64', 'linux-x86_64', 'linux-arm_64'] \
+                = os.environ['PLATFORM']
 ROOT_DIR =      pathlib.Path(os.environ['PULSAR_ROOT'])
 CONFIG_DIR =    pathlib.Path(os.environ['PULSAR_CONFIG_DIR'])
 SRC_DIR =       pathlib.Path(os.environ['PULSAR_SRC_DIR'])
@@ -32,6 +35,7 @@ CACHE_DIR =     pathlib.Path(os.environ['PULSAR_CACHE_DIR'])
 STATE_DIR =     pathlib.Path(os.environ['PULSAR_STATE_DIR'])
 VENV_DIR =      pathlib.Path(os.environ['PULSAR_VENV_DIR'])
 
+LIBRARY_PATH = SRC_DIR / 'pulsar/library'
 
 class Codex(typer.core.TyperGroup):
 
@@ -41,8 +45,7 @@ class Codex(typer.core.TyperGroup):
         self.book_shelf = dict[str, str]()
 
         # Add lazy commands for all spell books
-        library_path = SRC_DIR / 'pulsar/library'
-        for spell_book_dir in library_path.iterdir():
+        for spell_book_dir in LIBRARY_PATH.iterdir():
 
             book_title = spell_book_dir.stem
 
@@ -57,16 +60,17 @@ class Codex(typer.core.TyperGroup):
 
     def resolve_command(self, ctx, args):
         name = args[0] if args else None
-        if name in self.book_shelf:
-            import importlib
-            module_name = self.book_shelf[name]
-            importlib.import_module(module_name)
-            spell_book = SpellBook.registry[module_name]
-            cmd = typer.main.get_group(spell_book.app)
-            cmd.name = name
-            return name, cmd, args[1:]
-
-        return super().resolve_command(ctx, args)
+        
+        if name not in self.book_shelf:
+            return super().resolve_command(ctx, args)
+        
+        import importlib
+        module_name = self.book_shelf[name]
+        importlib.import_module(module_name)
+        spell_book = SpellBook.registry[module_name]
+        cmd = typer.main.get_group(spell_book.app)
+        cmd.name = name
+        return name, cmd, args[1:]
 
     @staticmethod
     def main_callback(
@@ -120,7 +124,7 @@ def version() -> str:
 @app.command(
     context_settings={
         "allow_extra_args": True, 
-        "ignore_unknown_options": True
+        "ignore_unknown_options": True,
     }, 
     add_help_option=False,
 )
