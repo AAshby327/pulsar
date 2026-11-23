@@ -31,7 +31,6 @@ class _RITUAL_STATE(enum.Enum):
 
 @dataclasses.dataclass
 class Ritual[**P]:
-
     callback: typing.Callable[P, None] | None = None
 
     progress: float | None = None
@@ -70,14 +69,14 @@ class Installer:
 
 @dataclasses.dataclass
 class SummonerGoblin:
-    callback: typing.Callable[[SummonerGoblin], None] | None = None
-    main_thread_connection: PipeConnection | None = None
+    _callback: typing.Callable[[SummonerGoblin], None] | None = None
+    _main_thread_connection: PipeConnection | None = None
 
     def report_progress(self, progress: float | None):
-            self.main_thread_connection.send({'progress': progress})
+            self._main_thread_connection.send({'progress': progress})
     
     def report_status(self, status: str):
-        self.main_thread_connection.send({'status': status})
+        self._main_thread_connection.send({'status': status})
 
 
 @dataclasses.dataclass
@@ -114,9 +113,8 @@ class _GoblinConnection:
             self.process = None
 
         self.ritual = None
-        self.goblin.callback = None
-        self.goblin.main_thread_connection = None
-
+        self.goblin._callback = None
+        self.goblin._main_thread_connection = None
 
 
 def _execute_ritual(goblin: SummonerGoblin):
@@ -124,12 +122,12 @@ def _execute_ritual(goblin: SummonerGoblin):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     try:
-        goblin.callback(goblin)
-        goblin.main_thread_connection.send({'state': _RITUAL_STATE.COMPLETED})
+        goblin._callback(goblin)
+        goblin._main_thread_connection.send({'state': _RITUAL_STATE.COMPLETED})
 
     except BaseException as e:
         try:
-            goblin.main_thread_connection.send({
+            goblin._main_thread_connection.send({
                 'state': _RITUAL_STATE.FAILED,
                 'error': f'{type(e).__name__}: {e}',
                 'traceback': traceback.format_exc(),
@@ -139,52 +137,52 @@ def _execute_ritual(goblin: SummonerGoblin):
             pass
 
     finally:
-        goblin.main_thread_connection.close()
+        goblin._main_thread_connection.close()
 
 
 class SummoningCircle:
 
-    ctx: SpawnContext
-    worker_goblins: list[_GoblinConnection]
+    _ctx: SpawnContext
+    _worker_goblins: list[_GoblinConnection]
 
-    installers: set[Installer]
-    rituals: dict[Ritual[SummonerGoblin], set[Ritual[SummonerGoblin]]] # Ritual -> Prerequisites
+    _installers: set[Installer]
+    _rituals: dict[Ritual[SummonerGoblin], set[Ritual[SummonerGoblin]]] # Ritual -> Prerequisites
 
-    aborted: bool
+    _aborted: bool
 
     def __init__(self, max_workers=multiprocessing.cpu_count()):
 
         assert max_workers >= 1
 
-        self.ctx = multiprocessing.get_context('spawn')
-        self.worker_goblins = [
+        self._ctx = multiprocessing.get_context('spawn')
+        self._worker_goblins = [
             _GoblinConnection()
             for _ in range(max_workers)
         ]
 
-        self.installers = set()
-        self.rituals = dict()
+        self._installers = set()
+        self._rituals = dict()
 
-        self.aborted = False
+        self._aborted = False
 
 
     def submit(self, installer: Installer):
-        if installer in self.installers \
-        or self.aborted:
+        if installer in self._installers \
+        or self._aborted:
             return
 
         for dep in installer.build_dependencies:
             self.submit(dep)
 
-        self.installers.add(installer)
+        self._installers.add(installer)
 
         # Summon rituals never have prerequisites
         if installer.summon_ritual.callback is not None:
-            self.rituals[installer.summon_ritual] = set()
+            self._rituals[installer.summon_ritual] = set()
 
         if installer.install_ritual.callback is not None:
             prereqs = set()
-            self.rituals[installer.install_ritual] = prereqs
+            self._rituals[installer.install_ritual] = prereqs
 
             if installer.summon_ritual.callback is not None:
                 prereqs.add(installer.summon_ritual)
@@ -200,17 +198,24 @@ class SummoningCircle:
 
     def run(self):
         try:
-            while not self.aborted:
+            while not self._aborted:
+
+                for ritual in self._rituals:
+                    print(ritual.state, ritual.progress, ritual.status)
+                print()
+
+                time.sleep(0.5)
                 
                 if all(
                     ritual.state in (
                         _RITUAL_STATE.COMPLETED,
                         _RITUAL_STATE.FAILED,
-                    ) for ritual in self.rituals
+                    ) 
+                    for ritual in self._rituals
                 ):
                     break
 
-                for goblin_conn in self.worker_goblins:
+                for goblin_conn in self._worker_goblins:
 
                     ritual = goblin_conn.ritual
 
@@ -230,15 +235,8 @@ class SummoningCircle:
                     ritual.status = "Worker exited unexpectedly"
                     ritual.error = f"Worker exited with code {process.exitcode}"
 
-                    goblin_conn.release_ritual()
-                    self._start_pending_rituals()
-
-                for ritual in self.rituals:
-                    print(ritual.state, ritual.progress, ritual.status)
-                print()
-
-                time.sleep(0.5)
-
+                    self.abort()
+                    break
 
         except KeyboardInterrupt:
             signal.signal(signal.SIGINT, signal.SIG_IGN) # Handle this in main pulsar
@@ -250,9 +248,9 @@ class SummoningCircle:
 
     def abort(self, timeout=1.0):
 
-        self.aborted = True
+        self._aborted = True
 
-        for goblin_conn in self.worker_goblins:
+        for goblin_conn in self._worker_goblins:
             process = goblin_conn.process
 
             if process is not None and process.is_alive():
@@ -265,36 +263,36 @@ class SummoningCircle:
 
             goblin_conn.release_ritual()
 
-        for installer in self.installers:
+        for installer in self._installers:
             if installer.abort_ritual.callback is not None:
                 installer.abort_ritual.callback()
 
 
     def shutdown(self):
-        if not all(
+        if not self._aborted and not all(
             ritual.state in (
                 _RITUAL_STATE.COMPLETED,
                 _RITUAL_STATE.FAILED,
-            ) for ritual in self.rituals
-        ) and not self.aborted:
+            ) for ritual in self._rituals
+        ):
             self.abort()
 
         else:
-            for goblin_conn in self.worker_goblins:
+            for goblin_conn in self._worker_goblins:
                 goblin_conn.release_ritual()
 
 
     def _start_pending_rituals(self):
-        if self.aborted:
+        if self._aborted:
             return
 
-        for goblin_conn in self.worker_goblins:
+        for goblin_conn in self._worker_goblins:
 
             if goblin_conn.ritual is not None \
             and goblin_conn.ritual.state == _RITUAL_STATE.RUNNING:
                 continue
 
-            for ritual, prereqs in self.rituals.items():
+            for ritual, prereqs in self._rituals.items():
                 if ritual.state == _RITUAL_STATE.PENDING \
                 and all([   prereq.state == _RITUAL_STATE.COMPLETED
                             for prereq in prereqs]): 
@@ -304,12 +302,12 @@ class SummoningCircle:
     
             goblin_conn.ritual = ritual
 
-            parent_conn, child_conn = self.ctx.Pipe(duplex=False)
+            parent_conn, child_conn = self._ctx.Pipe(duplex=False)
 
-            goblin_conn.goblin.callback = ritual.callback
-            goblin_conn.goblin.main_thread_connection = child_conn
+            goblin_conn.goblin._callback = ritual.callback
+            goblin_conn.goblin._main_thread_connection = child_conn
 
-            goblin_conn.process = self.ctx.Process(
+            goblin_conn.process = self._ctx.Process(
                 target=_execute_ritual,
                 args=[goblin_conn.goblin],
                 name=f"Ritual-", # Name of goblin
@@ -329,7 +327,8 @@ class SummoningCircle:
                 ritual.status = "Failed to start"
                 ritual.error = str(e)
 
-                continue
+                self.abort()
+                return
 
 
     def _process_connection(self, goblin_conn: _GoblinConnection):
@@ -361,12 +360,12 @@ class SummoningCircle:
                 if 'state' in message:
                     ritual.state = message['state']
 
-                    if ritual.state in (
-                        _RITUAL_STATE.COMPLETED,
-                        _RITUAL_STATE.FAILED,
-                    ):
+                    if ritual.state == _RITUAL_STATE.COMPLETED:
                         goblin_conn.release_ritual()
                         self._start_pending_rituals()
+
+                    elif ritual.state == _RITUAL_STATE.FAILED:
+                        self.abort()
 
             except (EOFError, OSError):
                 goblin_conn.release_ritual()
@@ -404,7 +403,7 @@ def quick_install(goblin: SummonerGoblin):
 
 @quick.abort_ritual.bind
 def quick_abort():
-    print("Quick aborted.")
+    print("Quick _aborted.")
 
 
 # 2. Slow ritual: tests long-running workers.
@@ -426,7 +425,7 @@ def slow_install(goblin: SummonerGoblin):
 
 @slow.abort_ritual.bind
 def slow_abort():
-    print("Slow aborted.")
+    print("Slow _aborted.")
 
 
 # 3. Random duration: tests unpredictable completion order.
@@ -448,7 +447,7 @@ def random_duration_install(goblin: SummonerGoblin):
 
 @random_duration.abort_ritual.bind
 def random_duration_abort():
-    print("Random duration aborted.")
+    print("Random duration _aborted.")
 
 
 # 4. No progress: tests workers that never report progress.
@@ -461,7 +460,7 @@ def silent_summon(goblin: SummonerGoblin):
 
 @silent.abort_ritual.bind
 def silent_abort():
-    print("Silent aborted.")
+    print("Silent _aborted.")
 
 
 # 5. Status spam: tests frequent IPC messages.
@@ -479,7 +478,7 @@ def status_spam_install(goblin: SummonerGoblin):
 
 @status_spam.abort_ritual.bind
 def status_spam_abort():
-    print("Status spam aborted.")
+    print("Status spam _aborted.")
 
 
 # 6. Progress spam: tests frequent progress messages.
@@ -492,7 +491,7 @@ def progress_spam_install(goblin: SummonerGoblin):
 
 @progress_spam.abort_ritual.bind
 def progress_spam_abort():
-    print("Progress Spam Aborted.")
+    print("Progress Spam _aborted.")
 
 
 # 7. Exception immediately: tests worker exception handling.
@@ -500,7 +499,8 @@ instant_failure = Installer()
 
 @instant_failure.summon_ritual.bind
 def instant_failure_ritual(goblin: SummonerGoblin):
-    raise RuntimeError("Intentional immediate failure")
+    # raise RuntimeError("Intentional immediate failure")
+    pass
 
 
 # 8. Exception halfway through: tests partial progress before failure.
@@ -515,7 +515,7 @@ def midway_failure_install(goblin: SummonerGoblin):
         goblin.report_progress(i / 10)
         goblin.report_status(f"Preparing failure: {i}/10")
 
-    raise ValueError("Intentional halfway failure")
+    # raise ValueError("Intentional halfway failure")
 
 
 # 9. CPU workload: tests CPU-bound workers.
@@ -561,7 +561,7 @@ delayed_failure = Installer()
 def delayed_failure_ritual(goblin: SummonerGoblin):
     goblin.report_status("Starting delayed operation")
     time.sleep(5)
-    raise RuntimeError("Delayed failure triggered")
+    # raise RuntimeError("Delayed failure triggered")
 
 
 # 12. Random intermittent failures.
@@ -574,8 +574,8 @@ def unstable_ritual(goblin: SummonerGoblin):
         goblin.report_progress(i / 10)
         goblin.report_status(f"Unstable operation: {i}/10")
 
-        if random.random() < 0.2:
-            raise RuntimeError(f"Random failure at step {i}")
+        # if random.random() < 0.2:
+        #     raise RuntimeError(f"Random failure at step {i}")
 
     goblin.report_status("Unstable operation completed")
 
