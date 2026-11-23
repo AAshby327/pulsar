@@ -3,7 +3,9 @@ import enum
 import signal
 import time
 import traceback
+import dataclasses
 import multiprocessing
+import threading
 
 if typing.TYPE_CHECKING:
     from multiprocessing.context import SpawnProcess, SpawnContext
@@ -12,24 +14,109 @@ if typing.TYPE_CHECKING:
     DECORATOR_INPUT = typing.TypeVar('DECORATOR_INPUT', bound=typing.Callable)
 
 
-class SummonerGoblin:
+__all__ = [
+    'Ritual',
+    'Installer',
+    'SummonerGoblin',
+    'SummoningCircle',
+]
 
-    callback: typing.Callable[[SummonerGoblin], None]
-    connection: PipeConnection
+
+class _RITUAL_STATE(enum.Enum):
+    PENDING = enum.auto()
+    RUNNING = enum.auto()
+    COMPLETED = enum.auto()
+    FAILED = enum.auto()
+
+
+@dataclasses.dataclass
+class Ritual[**P]:
+
+    callback: typing.Callable[P, None] | None = None
+
+    progress: float | None = None
+    status: str = ''
+    error: str | None = None
+    traceback: str | None = None
+
+    state: _RITUAL_STATE = _RITUAL_STATE.PENDING
+
+    def __hash__(self):
+        return id(self)
+
+    def bind(self, callback: DECORATOR_INPUT) -> DECORATOR_INPUT:
+        self.callback = callback
+        return callback
+
+
+class Installer:
+    build_dependencies: set[Installer]
+
+    summon_ritual: Ritual[[SummonerGoblin]]
+    install_ritual: Ritual[[SummonerGoblin]]
+    abort_ritual: Ritual[[]]
 
     def __init__(
-        self, 
-        callback: typing.Callable[[SummonerGoblin], None],
-        connection: PipeConnection,
+        self,
+        build_dependencies: set[Installer] = None,
     ):
-        self.callback = callback
-        self.connection = connection
+        self.build_dependencies = build_dependencies \
+            if build_dependencies is not None else set()
+
+        self.summon_ritual = Ritual()
+        self.install_ritual = Ritual()
+        self.abort_ritual = Ritual()
+
+
+@dataclasses.dataclass
+class SummonerGoblin:
+    callback: typing.Callable[[SummonerGoblin], None] | None = None
+    main_thread_connection: PipeConnection | None = None
 
     def report_progress(self, progress: float | None):
-        self.connection.send({'progress': progress})
-
+            self.main_thread_connection.send({'progress': progress})
+    
     def report_status(self, status: str):
-        self.connection.send({'status': status})
+        self.main_thread_connection.send({'status': status})
+
+
+@dataclasses.dataclass
+class _GoblinConnection:
+    ritual: Ritual | None = None
+    process: SpawnProcess | None = None
+    connection: PipeConnection | None = None
+
+    goblin: SummonerGoblin = dataclasses.field(
+        default_factory=lambda: SummonerGoblin()
+    )
+
+    def release_ritual(self):
+        if self.connection is not None:
+            try:
+                self.connection.close()
+            except OSError:
+                pass
+
+            self.connection = None
+
+        if self.process is not None:
+            if self.process.is_alive():
+                self.process.join(1.0)
+
+            if not self.process.is_alive():
+                self.process.join()
+
+                try:
+                    self.process.close()
+                except (ValueError, OSError):
+                    pass
+
+            self.process = None
+
+        self.ritual = None
+        self.goblin.callback = None
+        self.goblin.main_thread_connection = None
+
 
 
 def _execute_ritual(goblin: SummonerGoblin):
@@ -37,14 +124,13 @@ def _execute_ritual(goblin: SummonerGoblin):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     try:
-        goblin.connection.send({'state': Ritual.RITUAL_STATE.RUNNING})
         goblin.callback(goblin)
-        goblin.connection.send({'state': Ritual.RITUAL_STATE.COMPLETED})
+        goblin.main_thread_connection.send({'state': _RITUAL_STATE.COMPLETED})
 
     except BaseException as e:
         try:
-            goblin.connection.send({
-                'state': Ritual.RITUAL_STATE.FAILED,
+            goblin.main_thread_connection.send({
+                'state': _RITUAL_STATE.FAILED,
                 'error': f'{type(e).__name__}: {e}',
                 'traceback': traceback.format_exc(),
             })
@@ -53,140 +139,106 @@ def _execute_ritual(goblin: SummonerGoblin):
             pass
 
     finally:
-        goblin.connection.close()
-
-
-class Ritual:
-    callback: typing.Callable[[SummonerGoblin], None] | None
-
-    state: RITUAL_STATE
-    progress: float | None
-    status: str
-
-    process: SpawnProcess | None
-    connection: PipeConnection | None
-
-    error: str | None
-    traceback: str | None
-
-    class RITUAL_STATE(enum.Enum):
-        PENDING = enum.auto()
-        RUNNING = enum.auto()
-        COMPLETED = enum.auto()
-        FAILED = enum.auto()
-        ABORTED = enum.auto()
-
-
-    def __init__(self, callback: typing.Callable[[Ritual], None] | None = None):
-        self.callback = callback
-
-        self.state = Ritual.RITUAL_STATE.PENDING
-        self.progress = None
-        self.status = ''
-
-        self.process = None
-        self.connection = None
-
-        self.error = None
-        self.traceback = None
-
-
-    def bind(self, callback: DECORATOR_INPUT) -> DECORATOR_INPUT:
-        self.callback = callback
-        return callback
-
-
-    def _reset(self):
-        self.__init__(self.callback)
-
-
-class Installer:
-
-    build_dependencies: set[Installer]
-
-    summon_ritual: Ritual
-    install_ritual: Ritual
-    abort_ritual: Ritual
-
-    def __init__(self, build_dependencies: set[Installer] | None = None):
-        self.build_dependencies = build_dependencies \
-                if build_dependencies is not None else set()
-
-        self.summon_ritual = Ritual()
-        self.install_ritual = Ritual()
-        self.abort_ritual = Ritual()
+        goblin.main_thread_connection.close()
 
 
 class SummoningCircle:
 
     ctx: SpawnContext
-
-    max_workers: int
+    worker_goblins: list[_GoblinConnection]
 
     installers: set[Installer]
-    rituals: set[Ritual]
-    pending_rituals: set[Ritual]
+    rituals: dict[Ritual[SummonerGoblin], set[Ritual[SummonerGoblin]]] # Ritual -> Prerequisites
 
+    aborted: bool
 
     def __init__(self, max_workers=multiprocessing.cpu_count()):
 
         assert max_workers >= 1
 
         self.ctx = multiprocessing.get_context('spawn')
-        self.max_workers = max_workers
+        self.worker_goblins = [
+            _GoblinConnection()
+            for _ in range(max_workers)
+        ]
+
         self.installers = set()
-        self.rituals = set()
-        self.pending_rituals = set()
+        self.rituals = dict()
+
+        self.aborted = False
 
 
-    def submit(self, installer: Installer): 
-        if installer in self.installers:
+    def submit(self, installer: Installer):
+        if installer in self.installers \
+        or self.aborted:
             return
-
-        self.installers.add(installer)
-
-        self.rituals.add(installer.summon_ritual)
-        self.pending_rituals.add(installer.summon_ritual)
 
         for dep in installer.build_dependencies:
             self.submit(dep)
+
+        self.installers.add(installer)
+
+        # Summon rituals never have prerequisites
+        if installer.summon_ritual.callback is not None:
+            self.rituals[installer.summon_ritual] = set()
+
+        if installer.install_ritual.callback is not None:
+            prereqs = set()
+            self.rituals[installer.install_ritual] = prereqs
+
+            if installer.summon_ritual.callback is not None:
+                prereqs.add(installer.summon_ritual)
+
+            for dep in installer.build_dependencies:
+                if dep.install_ritual.callback is not None:
+                    prereqs.add(dep.install_ritual)
+                elif dep.summon_ritual.callback is not None:
+                    prereqs.add(dep.summon_ritual)
 
         self._start_pending_rituals()
 
 
     def run(self):
         try:
-            while not all(
-                ritual.state in (
-                    Ritual.RITUAL_STATE.COMPLETED,
-                    Ritual.RITUAL_STATE.FAILED,
-                    Ritual.RITUAL_STATE.ABORTED,
-                ) for ritual in self.rituals
-            ):
-                for ritual in self.rituals:
+            while not self.aborted:
+                
+                if all(
+                    ritual.state in (
+                        _RITUAL_STATE.COMPLETED,
+                        _RITUAL_STATE.FAILED,
+                    ) for ritual in self.rituals
+                ):
+                    break
 
-                    if ritual.state != Ritual.RITUAL_STATE.RUNNING:
+                for goblin_conn in self.worker_goblins:
+
+                    ritual = goblin_conn.ritual
+
+                    if ritual is None or ritual.state != _RITUAL_STATE.RUNNING:
                         continue
 
-                    self._process_connection(ritual)
+                    self._process_connection(goblin_conn)
 
-                    if ritual.process is None \
-                    or ritual.process.is_alive() \
-                    or ritual.state != Ritual.RITUAL_STATE.RUNNING:
+                    process = goblin_conn.process
+
+                    if process is None \
+                    or process.is_alive() \
+                    or ritual.state != _RITUAL_STATE.RUNNING:
                         continue
 
-                    ritual.state = Ritual.RITUAL_STATE.FAILED
+                    ritual.state = _RITUAL_STATE.FAILED
                     ritual.status = "Worker exited unexpectedly"
-                    ritual.error = f"Worker exited with code {ritual.process.exitcode}"
+                    ritual.error = f"Worker exited with code {process.exitcode}"
 
-                    self._cleanup_ritual(ritual)
+                    goblin_conn.release_ritual()
                     self._start_pending_rituals()
 
                 for ritual in self.rituals:
                     print(ritual.state, ritual.progress, ritual.status)
-                print("\n\n\n")
+                print()
 
-                time.sleep(0.5) # Make this a param
+                time.sleep(0.5)
+
 
         except KeyboardInterrupt:
             signal.signal(signal.SIGINT, signal.SIG_IGN) # Handle this in main pulsar
@@ -197,103 +249,102 @@ class SummoningCircle:
 
 
     def abort(self, timeout=1.0):
-        for ritual in self.rituals:
 
-            if ritual.state in (
-                Ritual.RITUAL_STATE.COMPLETED,
-                Ritual.RITUAL_STATE.FAILED,
-                Ritual.RITUAL_STATE.ABORTED,
-            ):
-                continue
+        self.aborted = True
 
-            if ritual.state == Ritual.RITUAL_STATE.PENDING:
-                ritual.state = Ritual.RITUAL_STATE.ABORTED
-                continue
+        for goblin_conn in self.worker_goblins:
+            process = goblin_conn.process
 
-            if ritual.process is not None and ritual.process.is_alive():
+            if process is not None and process.is_alive():
+                process.terminate()
+                process.join(timeout)
 
-                ritual.process.terminate()
-                ritual.process.join(timeout)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
 
-                if ritual.process.is_alive():
-                    ritual.process.kill()
-                    ritual.process.join()
+            goblin_conn.release_ritual()
 
-            self._cleanup_ritual(ritual)
-
-            ritual.state = Ritual.RITUAL_STATE.ABORTED
+        for installer in self.installers:
+            if installer.abort_ritual.callback is not None:
+                installer.abort_ritual.callback()
 
 
     def shutdown(self):
-
         if not all(
             ritual.state in (
-                Ritual.RITUAL_STATE.COMPLETED,
-                Ritual.RITUAL_STATE.FAILED,
-                Ritual.RITUAL_STATE.ABORTED,
+                _RITUAL_STATE.COMPLETED,
+                _RITUAL_STATE.FAILED,
             ) for ritual in self.rituals
-        ):
+        ) and not self.aborted:
             self.abort()
 
-        for ritual in self.rituals:
-            self._cleanup_ritual(ritual)
+        else:
+            for goblin_conn in self.worker_goblins:
+                goblin_conn.release_ritual()
 
 
     def _start_pending_rituals(self):
+        if self.aborted:
+            return
 
-        running = sum(
-            ritual.state == Ritual.RITUAL_STATE.RUNNING
-            for ritual in self.rituals
-        )
+        for goblin_conn in self.worker_goblins:
 
-        while running < self.max_workers and len(self.pending_rituals) > 0:
-            ritual = self.pending_rituals.pop()
+            if goblin_conn.ritual is not None \
+            and goblin_conn.ritual.state == _RITUAL_STATE.RUNNING:
+                continue
+
+            for ritual, prereqs in self.rituals.items():
+                if ritual.state == _RITUAL_STATE.PENDING \
+                and all([   prereq.state == _RITUAL_STATE.COMPLETED
+                            for prereq in prereqs]): 
+                    break
+            else: 
+                return
+    
+            goblin_conn.ritual = ritual
 
             parent_conn, child_conn = self.ctx.Pipe(duplex=False)
 
-            worker_goblin = SummonerGoblin(
-                ritual.callback,
-                child_conn,
-            )
+            goblin_conn.goblin.callback = ritual.callback
+            goblin_conn.goblin.main_thread_connection = child_conn
 
-            process = self.ctx.Process(
+            goblin_conn.process = self.ctx.Process(
                 target=_execute_ritual,
-                args=(worker_goblin,),
-                name=f"Ritual-",
+                args=[goblin_conn.goblin],
+                name=f"Ritual-", # Name of goblin
             )
+            goblin_conn.connection = parent_conn
+            ritual.state = _RITUAL_STATE.RUNNING
 
-            try:
-                process.start()
+            try: 
+                goblin_conn.process.start()
                 child_conn.close()
 
             except Exception as e:
                 parent_conn.close()
                 child_conn.close()
 
-                ritual.state = Ritual.RITUAL_STATE.FAILED
-                ritual.status = 'Failed to start'
+                ritual.state = _RITUAL_STATE.FAILED
+                ritual.status = "Failed to start"
                 ritual.error = str(e)
 
                 continue
 
-            ritual.process = process
-            ritual.connection = parent_conn
-            ritual.state = Ritual.RITUAL_STATE.RUNNING
 
-            running += 1
-
-
-    def _process_connection(self, ritual: Ritual):
+    def _process_connection(self, goblin_conn: _GoblinConnection):
         while True:
-
-            if ritual.connection is None:
+            if goblin_conn.connection is None \
+            or goblin_conn.ritual is None:
                 return
 
+            ritual = goblin_conn.ritual
+
             try:
-                if not ritual.connection.poll(0):
+                if not goblin_conn.connection.poll(0):
                     break
 
-                message = ritual.connection.recv()
+                message = goblin_conn.connection.recv()
 
                 if 'progress' in message:
                     ritual.progress = message['progress']
@@ -311,54 +362,15 @@ class SummoningCircle:
                     ritual.state = message['state']
 
                     if ritual.state in (
-                        Ritual.RITUAL_STATE.COMPLETED,
-                        Ritual.RITUAL_STATE.FAILED,
-                        Ritual.RITUAL_STATE.ABORTED,
+                        _RITUAL_STATE.COMPLETED,
+                        _RITUAL_STATE.FAILED,
                     ):
-                        self._cleanup_ritual(ritual)
+                        goblin_conn.release_ritual()
                         self._start_pending_rituals()
 
             except (EOFError, OSError):
-                self._cleanup_ritual(ritual)
-                # No cleanup process in original
+                goblin_conn.release_ritual()
                 break
-
-
-    def _cleanup_ritual(self, ritual: Ritual):
-        if ritual.connection is not None:
-            try:
-                ritual.connection.close()
-            except OSError:
-                pass
-
-            ritual.connection = None
-
-
-        if ritual.process is not None:
-            if ritual.process.is_alive():
-                ritual.process.join(1.0)
-
-            if not ritual.process.is_alive():
-                ritual.process.join()
-
-                try:
-                    ritual.process.close()
-                except (ValueError, OSError):
-                    pass
-
-            ritual.process = None
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -377,60 +389,110 @@ import random
 quick = Installer()
 
 @quick.summon_ritual.bind
-def quick_ritual(goblin: SummonerGoblin):
+def quick_summon(goblin: SummonerGoblin):
     goblin.report_status("Performing quick operation")
     time.sleep(0.2)
     goblin.report_progress(1.0)
     goblin.report_status("Quick operation completed")
+
+@quick.install_ritual.bind
+def quick_install(goblin: SummonerGoblin):
+    goblin.report_status("Performing quick operation")
+    time.sleep(0.2)
+    goblin.report_progress(1.0)
+    goblin.report_status("Quick operation completed")
+
+@quick.abort_ritual.bind
+def quick_abort():
+    print("Quick aborted.")
 
 
 # 2. Slow ritual: tests long-running workers.
 slow = Installer()
 
 @slow.summon_ritual.bind
-def slow_ritual(goblin: SummonerGoblin):
+def slow_summon(goblin: SummonerGoblin):
     for i in range(1, 21):
         time.sleep(0.5)
         goblin.report_progress(i / 20)
         goblin.report_status(f"Long operation: {i}/20")
+
+@slow.install_ritual.bind
+def slow_install(goblin: SummonerGoblin):
+    for i in range(1, 21):
+        time.sleep(0.5)
+        goblin.report_progress(i / 20)
+        goblin.report_status(f"Long operation: {i}/20")
+
+@slow.abort_ritual.bind
+def slow_abort():
+    print("Slow aborted.")
 
 
 # 3. Random duration: tests unpredictable completion order.
 random_duration = Installer()
 
 @random_duration.summon_ritual.bind
-def random_duration_ritual(goblin: SummonerGoblin):
+def random_duration_summon(goblin: SummonerGoblin):
     duration = random.uniform(1, 5)
     goblin.report_status(f"Working for {duration:.2f} seconds")
     time.sleep(duration)
     goblin.report_progress(1.0)
+
+@random_duration.install_ritual.bind
+def random_duration_install(goblin: SummonerGoblin):
+    duration = random.uniform(1, 5)
+    goblin.report_status(f"Working for {duration:.2f} seconds")
+    time.sleep(duration)
+    goblin.report_progress(1.0)
+
+@random_duration.abort_ritual.bind
+def random_duration_abort():
+    print("Random duration aborted.")
 
 
 # 4. No progress: tests workers that never report progress.
 silent = Installer()
 
 @silent.summon_ritual.bind
-def silent_ritual(goblin: SummonerGoblin):
+def silent_summon(goblin: SummonerGoblin):
     goblin.report_status("Working silently")
     time.sleep(3)
+
+@silent.abort_ritual.bind
+def silent_abort():
+    print("Silent aborted.")
 
 
 # 5. Status spam: tests frequent IPC messages.
 status_spam = Installer()
 
 @status_spam.summon_ritual.bind
-def status_spam_ritual(goblin: SummonerGoblin):
+def status_spam_summon(goblin: SummonerGoblin):
     for i in range(500):
         goblin.report_status(f"Status update {i + 1}/500")
+
+@status_spam.install_ritual.bind
+def status_spam_install(goblin: SummonerGoblin):
+    for i in range(500):
+        goblin.report_status(f"Status update {i + 1}/500")
+
+@status_spam.abort_ritual.bind
+def status_spam_abort():
+    print("Status spam aborted.")
 
 
 # 6. Progress spam: tests frequent progress messages.
 progress_spam = Installer()
 
-@progress_spam.summon_ritual.bind
-def progress_spam_ritual(goblin: SummonerGoblin):
+@progress_spam.install_ritual.bind
+def progress_spam_install(goblin: SummonerGoblin):
     for i in range(1001):
         goblin.report_progress(i / 1000)
+
+@progress_spam.abort_ritual.bind
+def progress_spam_abort():
+    print("Progress Spam Aborted.")
 
 
 # 7. Exception immediately: tests worker exception handling.
@@ -442,10 +504,12 @@ def instant_failure_ritual(goblin: SummonerGoblin):
 
 
 # 8. Exception halfway through: tests partial progress before failure.
-midway_failure = Installer()
+midway_failure = Installer(
+    build_dependencies=set([slow])
+)
 
-@midway_failure.summon_ritual.bind
-def midway_failure_ritual(goblin: SummonerGoblin):
+@midway_failure.install_ritual.bind
+def midway_failure_install(goblin: SummonerGoblin):
     for i in range(1, 6):
         time.sleep(0.5)
         goblin.report_progress(i / 10)
@@ -516,8 +580,6 @@ def unstable_ritual(goblin: SummonerGoblin):
     goblin.report_status("Unstable operation completed")
 
 
-
-
 if __name__ == '__main__':
     multiprocessing.freeze_support()
 
@@ -543,6 +605,6 @@ if __name__ == '__main__':
 
     circle.run()
 
-    print("\nAll tasks finished.\n")
+    print("\nTest finished.\n")
 
 
