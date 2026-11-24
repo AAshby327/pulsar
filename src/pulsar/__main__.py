@@ -4,12 +4,12 @@ import pathlib
 
 import typer
 import typer.core
+import typer.rich_utils
 from rich.console import Console
+from rich.style import Style
 
 from pulsar.library import SpellBook
-
-stdout = Console()
-stderr = Console(stderr=True)
+from pulsar import theme
 
 ASCII_ART = \
 r'''
@@ -36,6 +36,13 @@ STATE_DIR =     pathlib.Path(os.environ['PULSAR_STATE_DIR'])
 VENV_DIR =      pathlib.Path(os.environ['PULSAR_VENV_DIR'])
 
 LIBRARY_PATH = SRC_DIR / 'pulsar/library'
+
+stdout_console = Console(theme=theme.tokyo_night)
+stderr_console = Console(stderr=True, theme=theme.tokyo_night)
+
+# Force typer to use pulsar consoles
+typer.rich_utils._get_rich_console = lambda stderr=False: \
+    stderr_console if stderr else stdout_console
 
 class Codex(typer.core.TyperGroup):
 
@@ -79,19 +86,19 @@ class Codex(typer.core.TyperGroup):
     ):
         if ctx.invoked_subcommand is None:
             if display_banner:
-                stderr.print(ASCII_ART, style='bold blue', markup=False, highlight=False)
-                stderr.print(
+                stderr_console.print(ASCII_ART, style=Style(color=theme.BLUE, bold=True), markup=False, highlight=False)
+                stderr_console.print(
                     "By Andrew Ashby\n",
-                    style='dim blue'
+                    style='dim'
                 )
 
-            stderr.print("[bold]Usage:[/bold] pulsar [COMMAND] [OPTIONS]\n")
-            stderr.print("Run [cyan]pulsar --help[/cyan] for more information.\n")
+            stderr_console.print("[bold]Usage:[/bold] pulsar [COMMAND] [OPTIONS]\n")
+            stderr_console.print("Run [bold][sky]pulsar --help[/bold][/sky] for more information.\n")
 
     @staticmethod
     def process_result(result, **kwargs):
         if result is not None:
-            stdout.print(result)
+            stdout_console.print(result)
 
 app = typer.Typer(
     name='pulsar',
@@ -176,25 +183,25 @@ def clean(
             items_to_remove.add(item)
 
     if len(items_to_remove) == 0:
-        stderr.print("Nothing to delete.")
+        stderr_console.print("Nothing to delete.")
         return
 
     if not yes:
-        stderr.print(f"\n[bold yellow]⚠ WARNING:[/bold yellow] This will delete the following directories:")
+        stderr_console.print(f"\n[bold yellow]⚠ WARNING:[/bold yellow] This will delete the following directories:")
         for item in items_to_remove:
-            stderr.print(item)
+            stderr_console.print(item)
 
         if not typer.confirm("Are you sure you want to continue?"):
-            stderr.print("[dim]Cancelled[/dim]\n")
+            stderr_console.print("[dim]Cancelled[/dim]\n")
             return
 
-    stderr.print("[bold cyan]Cleaning directories...[/bold cyan]")
+    stderr_console.print("[bold cyan]Cleaning directories...[/bold cyan]")
 
     import shutil
     for item in items_to_remove:
         shutil.rmtree(item)
 
-    stderr.print("[bold green]Clean complete.[/bold green]\n")
+    stderr_console.print("[bold green]Clean complete.[/bold green]\n")
 
 
 if __name__ == '__main__':

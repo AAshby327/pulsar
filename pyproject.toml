@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "psutil>=7.2.2",
+    "py7zr>=1.1.4",
     "pygit2>=1.20.1",
     "rich>=15.0.0",
     "typer>=0.27.2",
